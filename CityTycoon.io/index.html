@@ -1,0 +1,2469 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CityTycoon.io — Global Multiplayer Real-Estate Board Game</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: 'Inter', sans-serif;
+    }
+    body {
+      background-color: #0b0e17;
+      color: #f8fafc;
+      overflow-x: hidden;
+      margin: 0;
+    }
+
+    /* 11x11 Board Grid */
+    .board-grid {
+      display: grid;
+      grid-template-columns: 1.55fr repeat(9, 1fr) 1.55fr;
+      grid-template-rows: 1.55fr repeat(9, 1fr) 1.55fr;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      max-width: min(960px, 92vh);
+      max-height: 92vh;
+      background: #131826;
+      border: 4px solid #262f47;
+      border-radius: 20px;
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255,255,255,0.06);
+      position: relative;
+      user-select: none;
+    }
+
+    @media (max-width: 640px) {
+      .board-grid {
+        max-width: 100vw;
+        max-height: 100vw;
+        border-width: 2px;
+        border-radius: 12px;
+      }
+    }
+
+    .board-center {
+      grid-column: 2 / 11;
+      grid-row: 2 / 11;
+      background: radial-gradient(circle at center, #1a2236 0%, #101522 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.25rem;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid #232c43;
+    }
+
+    @media (max-width: 640px) {
+      .board-center {
+        padding: 0.35rem;
+        border-radius: 8px;
+      }
+    }
+
+    .tile {
+      border: 1px solid #232c43;
+      background: #161c2c;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      text-align: center;
+      overflow: hidden;
+      cursor: pointer;
+      touch-action: manipulation;
+      transition: transform 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .tile:hover {
+      background: #1f283e;
+      z-index: 15;
+      box-shadow: inset 0 0 0 1.5px rgba(139, 92, 246, 0.7);
+    }
+    .tile.mortgaged {
+      opacity: 0.55;
+      background: repeating-linear-gradient(
+        45deg,
+        #161c2c,
+        #161c2c 6px,
+        #221924 6px,
+        #221924 12px
+      );
+    }
+
+    /* Flag header strips across all sides so text is never squeezed */
+    .flag-header {
+      width: 100%;
+      height: 26%;
+      min-height: 18px;
+      background: rgba(15, 23, 42, 0.82);
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      padding: 1px 2px;
+      flex-shrink: 0;
+    }
+
+    @media (max-width: 640px) {
+      .flag-header {
+        min-height: 11px;
+        gap: 1px;
+        padding: 0 1px;
+      }
+    }
+
+    .flag-img {
+      height: 13px;
+      width: auto;
+      border-radius: 2px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.65);
+      object-fit: cover;
+    }
+
+    @media (max-width: 640px) {
+      .flag-img {
+        height: 8px;
+        border-radius: 1px;
+      }
+    }
+
+    /* Owner highlight bar */
+    .owner-banner {
+      width: 100%;
+      height: 7px;
+      flex-shrink: 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.35);
+      box-shadow: 0 -1px 6px rgba(0, 0, 0, 0.65);
+      z-index: 6;
+    }
+
+    @media (max-width: 640px) {
+      .owner-banner {
+        height: 4px;
+      }
+    }
+
+    /* Classic Pipped Dice styling */
+    .die-face {
+      width: 58px;
+      height: 58px;
+      background: linear-gradient(145deg, #ffffff, #e2e8f0);
+      border-radius: 14px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      place-items: center;
+      padding: 8px;
+      gap: 2px;
+      box-shadow: 0 8px 18px rgba(0,0,0,0.45), inset 0 -3px 0 #cbd5e1, inset 0 2px 2px #ffffff;
+      border: 1.5px solid #f8fafc;
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .die-pip {
+      width: 10px;
+      height: 10px;
+      border-radius: 9999px;
+      background: #0f172a;
+      box-shadow: inset 0 1px 1px rgba(0,0,0,0.6);
+      display: block;
+    }
+
+    @media (max-width: 640px) {
+      .die-face {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        padding: 4px;
+        gap: 1px;
+      }
+      .die-pip {
+        width: 5px;
+        height: 5px;
+      }
+    }
+
+    .dice-rolling {
+      animation: bounceDice 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    @keyframes bounceDice {
+      0%, 100% { transform: scale(1) rotate(0deg); }
+      25% { transform: scale(1.22) rotate(-16deg) translateY(-5px); }
+      55% { transform: scale(1.16) rotate(14deg) translateY(-2px); }
+      80% { transform: scale(1.05) rotate(-5deg); }
+    }
+
+    /* Player tokens on tiles */
+    .token-badge {
+      width: 22px;
+      height: 22px;
+      border-radius: 9999px;
+      display: inline-block;
+      border: 2.5px solid #ffffff;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.8);
+      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+      z-index: 20;
+    }
+
+    @media (max-width: 640px) {
+      .token-badge {
+        width: 12px;
+        height: 12px;
+        border-width: 1.5px;
+      }
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #101522;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #2b354f;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3e4c70;
+    }
+
+    /* Toggle Switch */
+    .toggle-checkbox:checked {
+      right: 0;
+      border-color: #8b5cf6;
+    }
+    .toggle-checkbox:checked + .toggle-label {
+      background-color: #7c3aed;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- TOP NAVBAR -->
+  <header class="w-full bg-[#111625]/90 backdrop-blur-md border-b border-slate-800/80 px-5 py-3 flex items-center justify-between sticky top-0 z-40">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-600/30">
+        <i class="fa-solid fa-earth-americas text-white text-lg"></i>
+      </div>
+      <div>
+        <h1 class="text-xl font-black tracking-tight bg-gradient-to-r from-white via-violet-200 to-indigo-300 bg-clip-text text-transparent">
+          CityTycoon<span class="text-violet-400">.io</span>
+        </h1>
+        <p class="text-[11px] text-slate-400 font-medium hidden sm:block">Global Real-Estate Multiplayer</p>
+      </div>
+    </div>
+
+    <div id="header-room-info" class="hidden items-center gap-3">
+      <div class="flex items-center gap-2 bg-slate-900/90 border border-slate-700/80 px-3.5 py-1.5 rounded-xl">
+        <span class="text-xs text-slate-400 font-medium">Room:</span>
+        <span id="header-room-code" class="font-mono font-extrabold text-sm text-violet-400 tracking-wider">------</span>
+        <button onclick="window.copyRoomCode()" title="Copy Room Code" class="text-slate-400 hover:text-white transition p-1">
+          <i class="fa-regular fa-copy text-xs"></i>
+        </button>
+        <button onclick="window.copyInviteLink()" title="Copy Invite Link" class="text-violet-400 hover:text-violet-200 transition p-1">
+          <i class="fa-solid fa-link text-xs"></i>
+        </button>
+      </div>
+      <button onclick="window.leaveRoom()" class="bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition">
+        <i class="fa-solid fa-right-from-bracket mr-1"></i> Leave
+      </button>
+    </div>
+  </header>
+
+  <!-- LOBBY SCREEN -->
+  <main id="lobby-screen" class="flex-1 flex items-center justify-center p-4 sm:p-8">
+    <div class="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- Left: Create or Join -->
+      <div class="lg:col-span-5 bg-[#131826] border border-slate-800 rounded-3xl p-6 sm:p-7 shadow-2xl flex flex-col justify-between">
+        <div>
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-violet-500/15 text-violet-300 border border-violet-500/25 mb-4">
+            <i class="fa-solid fa-globe"></i> World Cities Edition
+          </span>
+          <h2 class="text-2xl sm:text-3xl font-black text-white leading-tight mb-2">
+            Conquer Global Cities &amp; Build Monopolies
+          </h2>
+          <p class="text-sm text-slate-400 mb-6">
+            Own every city in a country to unlock a Country Monopoly, build up to 5 houses (1 Hotel), and outlast your rivals.
+          </p>
+
+          <!-- Player Profile Setup -->
+          <div class="space-y-4 mb-6">
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Your Nickname</label>
+              <input id="player-name-input" type="text" maxlength="16" placeholder="Enter your name..."
+                class="w-full bg-[#0d111c] border border-slate-700/80 focus:border-violet-500 rounded-xl px-4 py-3 text-sm font-semibold text-white outline-none transition" />
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div class="col-span-2">
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Player Color</label>
+                <div id="color-picker" class="flex items-center gap-2 flex-wrap"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-3 pt-4 border-t border-slate-800/80">
+          <button onclick="window.createRoom()" class="w-full py-3.5 px-5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-sm shadow-lg shadow-violet-600/25 transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-plus"></i> Create Invite Room
+          </button>
+
+          <div id="invite-banner" class="hidden items-center justify-between gap-2 bg-violet-950/50 border border-violet-500/40 rounded-xl px-3.5 py-2.5">
+            <div class="text-xs">
+              <div class="font-bold text-violet-200">Invite Link Detected</div>
+              <div class="text-slate-400">Room <span id="invite-banner-code" class="font-mono font-bold text-violet-300">------</span></div>
+            </div>
+            <button onclick="window.joinRoom()" class="py-2 px-3.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs transition whitespace-nowrap">
+              Join via Invite
+            </button>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <input id="join-code-input" type="text" maxlength="6" placeholder="ROOM CODE"
+              class="w-full bg-[#0d111c] border border-slate-700/80 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm font-mono font-bold uppercase tracking-widest text-white outline-none transition" />
+            <button onclick="window.joinRoom()" class="py-3 px-5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm border border-slate-700 transition whitespace-nowrap">
+              Join Room
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Waiting Room & Custom Rules -->
+      <div class="lg:col-span-7 bg-[#131826] border border-slate-800 rounded-3xl p-6 sm:p-7 shadow-2xl flex flex-col justify-between">
+        <div id="waiting-room-empty" class="flex-1 flex flex-col items-center justify-center text-center py-12">
+          <div class="w-16 h-16 rounded-2xl bg-slate-800/70 border border-slate-700/70 flex items-center justify-center mb-4 text-slate-400 text-2xl">
+            <i class="fa-solid fa-chess-board"></i>
+          </div>
+          <h3 class="text-lg font-bold text-slate-200 mb-1">No Active Room Selected</h3>
+          <p class="text-sm text-slate-400 max-w-sm">
+            Create an invite room on the left to generate a shareable link, customize game rules, or add AI Bots to start immediately.
+          </p>
+        </div>
+
+        <div id="waiting-room-active" class="hidden flex-1 flex flex-col justify-between">
+          <div>
+            <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800">
+              <div>
+                <span class="text-xs font-bold uppercase tracking-wider text-violet-400">Waiting Lobby</span>
+                <h3 class="text-xl font-black text-white flex items-center gap-2 flex-wrap mt-0.5">
+                  Room <span id="lobby-room-code" class="font-mono bg-slate-900 border border-slate-700 px-3 py-0.5 rounded-lg text-violet-300">------</span>
+                  <button onclick="window.copyInviteLink()" class="text-xs bg-violet-600 hover:bg-violet-500 px-3 py-1.5 rounded-lg text-white font-bold transition shadow">
+                    <i class="fa-solid fa-link mr-1"></i> Copy Invite Link
+                  </button>
+                  <button onclick="window.copyRoomCode()" class="text-xs bg-slate-800 hover:bg-slate-700 px-2.5 py-1.5 rounded-lg text-slate-300 font-semibold transition">
+                    <i class="fa-regular fa-copy mr-1"></i> Code
+                  </button>
+                </h3>
+              </div>
+              <button id="add-bot-btn" onclick="window.addBotPlayer()" class="bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 px-3.5 py-2 rounded-xl text-xs font-bold transition">
+                <i class="fa-solid fa-robot mr-1"></i> + Add AI Bot
+              </button>
+            </div>
+
+            <!-- Players List -->
+            <div class="mt-4">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Players (<span id="lobby-player-count">1</span>/6)</span>
+              </div>
+              <div id="lobby-players-list" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-5"></div>
+            </div>
+
+            <!-- Custom Room Rules (Host Editable) -->
+            <div class="bg-[#0d111c] border border-slate-800/90 rounded-2xl p-4 space-y-3.5">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-extrabold uppercase tracking-wider text-indigo-400">
+                  <i class="fa-solid fa-sliders mr-1.5"></i> Custom Room Rules
+                </span>
+                <span id="host-only-badge" class="text-[11px] text-slate-400">Host controls settings</span>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <!-- Starting Budget -->
+                <div class="bg-[#131826] border border-slate-800 rounded-xl p-3">
+                  <label class="block text-xs font-bold text-slate-300 mb-1">Starting Budget ($)</label>
+                  <input id="setting-starting-cash" type="number" min="200" max="50000" step="100" value="1500"
+                    onchange="window.updateRoomSettings()"
+                    class="w-full bg-[#0b0e17] border border-slate-700 rounded-lg px-3 py-1.5 text-sm font-bold text-emerald-400 outline-none focus:border-violet-500" />
+                </div>
+
+                <!-- Cash in Vacation -->
+                <div class="bg-[#131826] border border-slate-800 rounded-xl p-3 flex items-center justify-between">
+                  <div class="pr-2">
+                    <div class="text-xs font-bold text-slate-200">Cash in Vacation</div>
+                    <div class="text-[11px] text-slate-400">Taxes pool into Vacation jackpot</div>
+                  </div>
+                  <input id="setting-vacation-cash" type="checkbox" checked onchange="window.updateRoomSettings()"
+                    class="w-5 h-5 accent-violet-600 rounded cursor-pointer" />
+                </div>
+
+                <!-- Collect Rent While in Prison -->
+                <div class="bg-[#131826] border border-slate-800 rounded-xl p-3 flex items-center justify-between">
+                  <div class="pr-2">
+                    <div class="text-xs font-bold text-slate-200">Prison Rent Collection</div>
+                    <div class="text-[11px] text-slate-400">Collect rent while inside Prison</div>
+                  </div>
+                  <input id="setting-prison-rent" type="checkbox" checked onchange="window.updateRoomSettings()"
+                    class="w-5 h-5 accent-violet-600 rounded cursor-pointer" />
+                </div>
+
+                <!-- Allow Property Mortgaging -->
+                <div class="bg-[#131826] border border-slate-800 rounded-xl p-3 flex items-center justify-between">
+                  <div class="pr-2">
+                    <div class="text-xs font-bold text-slate-200">Allow Mortgaging</div>
+                    <div class="text-[11px] text-slate-400">Mortgage cities for 50% value</div>
+                  </div>
+                  <input id="setting-mortgage" type="checkbox" checked onchange="window.updateRoomSettings()"
+                    class="w-5 h-5 accent-violet-600 rounded cursor-pointer" />
+                </div>
+
+                <!-- Property Auctions -->
+                <div class="bg-[#131826] border border-slate-800 rounded-xl p-3 flex items-center justify-between sm:col-span-2">
+                  <div class="pr-2">
+                    <div class="text-xs font-bold text-slate-200">Property Auctions</div>
+                    <div class="text-[11px] text-slate-400">Auction unbought or unaffordable properties to highest bidder</div>
+                  </div>
+                  <input id="setting-auction" type="checkbox" checked onchange="window.updateRoomSettings()"
+                    class="w-5 h-5 accent-violet-600 rounded cursor-pointer" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-5 pt-4 border-t border-slate-800 flex items-center justify-between gap-3">
+            <p class="text-xs text-slate-400">Minimum 2 players required to start.</p>
+            <button id="start-game-btn" onclick="window.startGame()" class="py-3 px-7 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-sm shadow-lg shadow-emerald-500/25 transition">
+              <i class="fa-solid fa-play mr-1.5"></i> Start Game
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ACTIVE GAME SCREEN -->
+  <main id="game-screen" class="hidden flex-1 w-full max-w-[1780px] mx-auto p-2 sm:p-5 pb-20 xl:pb-5 grid grid-cols-1 xl:grid-cols-12 gap-3 sm:gap-5 items-start">
+    
+    <!-- Left Column: Players & Trade / Chat -->
+    <aside class="xl:col-span-3 space-y-3 sm:space-y-4 order-2 xl:order-1">
+      <!-- Players Standings -->
+      <div class="bg-[#131826] border border-slate-800 rounded-2xl p-3.5 sm:p-4 shadow-xl">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-400">
+            <i class="fa-solid fa-users mr-1.5 text-violet-400"></i> Players
+          </h3>
+          <button onclick="window.openTradeModal()" class="text-xs bg-violet-600/20 hover:bg-violet-600/35 text-violet-300 border border-violet-500/30 px-3 py-1.5 rounded-lg font-bold transition">
+            <i class="fa-solid fa-handshake mr-1"></i> Trade
+          </button>
+        </div>
+        <div id="game-players-list" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-2 sm:gap-2.5"></div>
+      </div>
+
+      <!-- Live Chat & Activity Log -->
+      <div class="bg-[#131826] border border-slate-800 rounded-2xl p-3.5 sm:p-4 shadow-xl flex flex-col h-[280px] sm:h-[340px]">
+        <div class="flex items-center gap-2 border-b border-slate-800 pb-2.5 mb-2.5">
+          <button id="tab-log-btn" onclick="window.switchFeedTab('log')" class="text-xs font-bold px-3 py-1.5 rounded-lg bg-violet-600 text-white">Game Log</button>
+          <button id="tab-chat-btn" onclick="window.switchFeedTab('chat')" class="text-xs font-bold px-3 py-1.5 rounded-lg text-slate-400 hover:text-white">Chat</button>
+        </div>
+
+        <div id="game-log-list" class="flex-1 overflow-y-auto space-y-1.5 text-xs pr-1"></div>
+        <div id="game-chat-list" class="hidden flex-1 overflow-y-auto space-y-2 text-xs pr-1"></div>
+
+        <form id="chat-form" onsubmit="window.sendChatMessage(event)" class="mt-2.5 pt-2 border-t border-slate-800 flex gap-2">
+          <input id="chat-input" type="text" maxlength="140" placeholder="Send a message..."
+            class="flex-1 min-w-0 bg-[#0b0e17] border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-violet-500" />
+          <button type="submit" class="bg-violet-600 hover:bg-violet-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition shrink-0">
+            <i class="fa-solid fa-paper-plane"></i>
+          </button>
+        </form>
+      </div>
+    </aside>
+
+    <!-- Center Column: 11x11 Interactive Global Board -->
+    <section class="xl:col-span-6 flex flex-col items-center justify-center order-1 xl:order-2 w-full">
+      <div id="board-grid" class="board-grid">
+        <!-- Center Hub -->
+        <div class="board-center rounded-2xl">
+          <!-- Top Status Banner -->
+          <div class="w-full flex flex-wrap items-center justify-between gap-1 sm:gap-2 bg-slate-900/85 border border-slate-800 px-2 py-1 sm:px-3.5 sm:py-2 rounded-lg sm:rounded-xl">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span id="turn-indicator-dot" class="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-emerald-400 shrink-0"></span>
+              <span id="turn-indicator-text" class="text-[10px] sm:text-sm font-extrabold text-white truncate">Waiting...</span>
+            </div>
+            <div id="vacation-pool-badge" class="hidden items-center gap-1 bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-md sm:rounded-lg text-[9px] sm:text-xs font-bold text-amber-300">
+              <i class="fa-solid fa-umbrella-beach"></i> $<span id="vacation-pool-amount">0</span>
+            </div>
+          </div>
+
+          <!-- Dice & Action Prompt -->
+          <div class="flex flex-col items-center justify-center my-auto text-center max-w-md w-full px-1">
+            <div class="flex items-center justify-center gap-2 sm:gap-4 mb-1.5 sm:mb-4">
+              <div id="die-1" class="die-face"></div>
+              <div id="die-2" class="die-face"></div>
+            </div>
+
+            <p id="center-status-message" class="text-[10px] sm:text-sm font-semibold text-slate-300 mb-1.5 sm:mb-4 line-clamp-2 leading-tight">
+              Roll the dice to begin your turn!
+            </p>
+
+            <!-- Primary Action Buttons -->
+            <div id="center-actions" class="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2.5 w-full"></div>
+          </div>
+
+          <!-- Rule Pills Footer -->
+          <div class="w-full flex flex-wrap items-center justify-center gap-1 text-[8px] sm:text-[10px] text-slate-400">
+            <span class="px-1.5 py-0.5 rounded bg-slate-900/90 border border-slate-800">START: +$200 / +$300</span>
+            <span class="px-1.5 py-0.5 rounded bg-slate-900/90 border border-slate-800">5 Houses = 1 Hotel</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mobile Sticky Action Dock (Visible on < xl screens while playing) -->
+      <div id="mobile-action-dock" class="xl:hidden fixed bottom-0 inset-x-0 z-30 bg-[#111625]/95 backdrop-blur-md border-t border-slate-800 px-3 py-2.5 flex items-center justify-between gap-2 shadow-2xl">
+        <div class="min-w-0">
+          <div id="mobile-turn-label" class="text-[11px] font-extrabold text-white truncate">Waiting...</div>
+          <div id="mobile-cash-label" class="text-xs font-black text-emerald-400">$1,500</div>
+        </div>
+        <div id="mobile-dock-actions" class="flex items-center gap-2 shrink-0"></div>
+      </div>
+    </section>
+
+    <!-- Right Column: My Portfolio & Country Monopolies -->
+    <aside class="xl:col-span-3 space-y-3 sm:space-y-4 order-3">
+      <div class="bg-[#131826] border border-slate-800 rounded-2xl p-3.5 sm:p-4 shadow-xl">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-400">
+            <i class="fa-solid fa-briefcase mr-1.5 text-emerald-400"></i> My Portfolio
+          </h3>
+          <span id="my-cash-display" class="text-base sm:text-lg font-black text-emerald-400">$1,500</span>
+        </div>
+        <p class="text-[11px] text-slate-400 mb-3">
+          Click any owned city or airport to build houses/hotels or mortgage.
+        </p>
+        <div id="my-properties-list" class="space-y-2 max-h-[380px] sm:max-h-[520px] overflow-y-auto pr-1"></div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- PROPERTY DETAILS / BUILD / MORTGAGE MODAL -->
+  <div id="property-modal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-[#151b2b] border border-slate-700 rounded-3xl max-w-md w-full p-6 shadow-2xl relative">
+      <button onclick="window.closePropertyModal()" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <div id="property-modal-content"></div>
+    </div>
+  </div>
+
+  <!-- LIVE AUCTION MODAL -->
+  <div id="auction-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-[#151b2b] border border-amber-500/40 rounded-3xl max-w-md w-full p-6 shadow-2xl">
+      <div class="flex items-center justify-between mb-3">
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+          <i class="fa-solid fa-gavel"></i> LIVE PROPERTY AUCTION
+        </span>
+      </div>
+      <div id="auction-modal-content"></div>
+    </div>
+  </div>
+
+  <!-- TOAST CONTAINER -->
+  <div id="toast-container" class="fixed top-20 right-4 z-50 space-y-2 pointer-events-none"></div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+    import { getAuth, signInAnonymously, signInWithCustomToken } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+    import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+    const COUNTRIES = {
+      BR: { name: 'Brazil', code: 'br' },
+      AE: { name: 'UAE', code: 'ae' },
+      IN: { name: 'India', code: 'in' },
+      AU: { name: 'Australia', code: 'au' },
+      DE: { name: 'Germany', code: 'de' },
+      JP: { name: 'Japan', code: 'jp' },
+      UK: { name: 'United Kingdom', code: 'gb' },
+      US: { name: 'United States', code: 'us' }
+    };
+
+    function getInviteLinkForRoom(code) {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set('room', code);
+        return url.toString();
+      } catch (e) {
+        return `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(code)}`;
+      }
+    }
+
+    function copyTextToClipboard(text) {
+      const temp = document.createElement('input');
+      temp.value = text;
+      document.body.appendChild(temp);
+      temp.select();
+      document.execCommand('copy');
+      temp.remove();
+    }
+
+    window.copyRoomCode = () => {
+      if (!currentRoomCode) return;
+      copyTextToClipboard(currentRoomCode);
+      showToast(`Copied room code: ${currentRoomCode}`, 'success');
+    };
+
+    window.copyInviteLink = () => {
+      if (!currentRoomCode) return;
+      const link = getInviteLinkForRoom(currentRoomCode);
+      copyTextToClipboard(link);
+      showToast(`Copied invite link for room ${currentRoomCode}!`, 'success');
+    };
+
+    function getFlagImg(countryKey, sizeClass = 'flag-img') {
+      const c = COUNTRIES[countryKey];
+      if (!c) return '';
+      return `<img src="https://flagcdn.com/w40/${c.code}.png" alt="${c.name}" class="${sizeClass}" />`;
+    }
+
+    // --- 40 BOARD SPACES (START AT TOP-LEFT, CLOCKWISE) ---
+    // Max Property Price: $400 (NYC) | Max Hotel Rent: $2000 (NYC)
+    const BOARD_SPACES = [
+      // TOP ROW (Left to Right: 0 to 10)
+      { id: 0,  name: 'START', type: 'start' },
+      { id: 1,  name: 'Rio de Janeiro', type: 'property', country: 'BR', price: 60,  rent: [4, 20, 60, 175, 310, 440], houseCost: 50 },
+      { id: 2,  name: 'Community Chest', type: 'chest' },
+      { id: 3,  name: 'São Paulo', type: 'property', country: 'BR', price: 80,  rent: [6, 30, 85, 255, 380, 520], houseCost: 50 },
+      { id: 4,  name: 'Income Tax', type: 'tax', amount: 200 },
+      { id: 5,  name: 'Dubai DXB Airport', type: 'airport', country: 'AE', price: 200, rent: [25, 50, 100, 200] },
+      { id: 6,  name: 'Sharjah', type: 'property', country: 'AE', price: 100, rent: [8, 40, 100, 285, 430, 570], houseCost: 50 },
+      { id: 7,  name: 'Chance', type: 'chance' },
+      { id: 8,  name: 'Abu Dhabi', type: 'property', country: 'AE', price: 110, rent: [8, 40, 100, 285, 430, 570], houseCost: 50 },
+      { id: 9,  name: 'Dubai', type: 'property', country: 'AE', price: 120, rent: [10, 50, 145, 430, 595, 715], houseCost: 50 },
+      { id: 10, name: 'Jail / Visiting', type: 'jail' },
+
+      // RIGHT COLUMN (Top to Bottom: 11 to 19)
+      { id: 11, name: 'Kolkata', type: 'property', country: 'IN', price: 140, rent: [10, 50, 145, 430, 595, 715], houseCost: 100 },
+      { id: 12, name: 'Solar Grid', type: 'utility', price: 150 },
+      { id: 13, name: 'New Delhi', type: 'property', country: 'IN', price: 150, rent: [12, 60, 170, 475, 665, 855], houseCost: 100 },
+      { id: 14, name: 'Mumbai', type: 'property', country: 'IN', price: 160, rent: [14, 65, 190, 520, 715, 900], houseCost: 100 },
+      { id: 15, name: 'Sydney SYD Airport', type: 'airport', country: 'AU', price: 200, rent: [25, 50, 100, 200] },
+      { id: 16, name: 'Brisbane', type: 'property', country: 'AU', price: 180, rent: [14, 65, 190, 520, 715, 900], houseCost: 100 },
+      { id: 17, name: 'Community Chest', type: 'chest' },
+      { id: 18, name: 'Melbourne', type: 'property', country: 'AU', price: 190, rent: [16, 75, 210, 570, 760, 950], houseCost: 100 },
+      { id: 19, name: 'Sydney', type: 'property', country: 'AU', price: 200, rent: [18, 85, 240, 665, 830, 1000], houseCost: 100 },
+
+      // BOTTOM ROW (Right to Left: 20 to 30)
+      { id: 20, name: 'Go To Jail', type: 'gotojail' },
+      { id: 21, name: 'Frankfurt', type: 'property', country: 'DE', price: 220, rent: [18, 85, 240, 665, 830, 1000], houseCost: 150 },
+      { id: 22, name: 'Chance', type: 'chance' },
+      { id: 23, name: 'Munich', type: 'property', country: 'DE', price: 230, rent: [20, 95, 285, 715, 880, 1045], houseCost: 150 },
+      { id: 24, name: 'Berlin', type: 'property', country: 'DE', price: 240, rent: [22, 105, 315, 760, 925, 1090], houseCost: 150 },
+      { id: 25, name: 'Tokyo HND Airport', type: 'airport', country: 'JP', price: 200, rent: [25, 50, 100, 200] },
+      { id: 26, name: 'Kyoto', type: 'property', country: 'JP', price: 260, rent: [22, 105, 315, 760, 925, 1090], houseCost: 150 },
+      { id: 27, name: 'Osaka', type: 'property', country: 'JP', price: 270, rent: [24, 115, 340, 810, 975, 1140], houseCost: 150 },
+      { id: 28, name: 'Hydro Water', type: 'utility', price: 150 },
+      { id: 29, name: 'Tokyo', type: 'property', country: 'JP', price: 280, rent: [26, 125, 370, 855, 1045, 1210], houseCost: 150 },
+      { id: 30, name: 'Vacation', type: 'vacation' },
+
+      // LEFT COLUMN (Bottom to Top: 31 to 39)
+      { id: 31, name: 'Edinburgh', type: 'property', country: 'UK', price: 300, rent: [26, 125, 370, 855, 1045, 1210], houseCost: 200 },
+      { id: 32, name: 'Manchester', type: 'property', country: 'UK', price: 310, rent: [28, 145, 430, 950, 1140, 1330], houseCost: 200 },
+      { id: 33, name: 'Community Chest', type: 'chest' },
+      { id: 34, name: 'London', type: 'property', country: 'UK', price: 320, rent: [30, 165, 475, 1045, 1235, 1425], houseCost: 200 },
+      { id: 35, name: 'JFK USA Airport', type: 'airport', country: 'US', price: 200, rent: [25, 50, 100, 200] },
+      { id: 36, name: 'Miami', type: 'property', country: 'US', price: 350, rent: [35, 175, 500, 1100, 1300, 1500], houseCost: 200 },
+      { id: 37, name: 'Los Angeles', type: 'property', country: 'US', price: 370, rent: [40, 190, 560, 1300, 1550, 1750], houseCost: 200 },
+      { id: 38, name: 'Luxury Tax', type: 'tax', amount: 150 },
+      { id: 39, name: 'New York City', type: 'property', country: 'US', price: 400, rent: [45, 220, 650, 1400, 1700, 2000], houseCost: 200 }
+    ];
+
+    const CHANCE_CARDS = [
+      { text: 'Flight upgrade to New York City! Advance to NYC.', action: 'move', target: 39 },
+      { text: 'Express flight to START! Collect $300.', action: 'move', target: 0 },
+      { text: 'Global tech dividends pay out +$150.', action: 'cash', amount: 150 },
+      { text: 'International speeding fine: Pay $50.', action: 'tax', amount: 50 },
+      { text: 'Advance to Tokyo! If you pass START, collect $200.', action: 'move', target: 29 },
+      { text: 'Fly to JFK USA Airport! Collect $200 if passing START.', action: 'move', target: 35 },
+      { text: 'Property renovation assessment: Pay $40 per house & $115 per hotel.', action: 'repairs', house: 40, hotel: 115 }
+    ];
+
+    const CHEST_CARDS = [
+      { text: 'Tax audit violation! Go directly to Prison. Do not pass START.', action: 'jail' },
+      { text: 'Global export bonus! Collect $200.', action: 'cash', amount: 200 },
+      { text: 'International health insurance fee: Pay $100.', action: 'tax', amount: 100 },
+      { text: 'Sovereign bond matures! Collect $100.', action: 'cash', amount: 100 },
+      { text: 'Customs duty fine: Pay $50.', action: 'tax', amount: 50 },
+      { text: 'Tourism board award: Collect $75.', action: 'cash', amount: 75 }
+    ];
+
+    const TOKEN_COLORS = [
+      '#ef4444', '#3b82f6', '#10b981', '#f59e0b',
+      '#8b5cf6', '#ec4899', '#06b6d4', '#f97316',
+      '#84cc16', '#14b8a6', '#a855f7', '#e11d48'
+    ];
+
+    // --- STATE & FIREBASE SETUP ---
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'citytycoon-global-v1';
+    let db = null;
+    let auth = null;
+    let useCloud = false;
+    let unsubscribeRoom = null;
+
+    let currentUser = { uid: 'player_' + Math.random().toString(36).substring(2, 10) };
+    let selectedColor = TOKEN_COLORS[0];
+    let currentRoomCode = null;
+    let gameState = null;
+    let activeFeedTab = 'log';
+    let botTimer = null;
+    let auctionTickTimer = null;
+    let lastPlayedDiceRollKey = '';
+
+    // Synthesized realistic dice rattle & table thud sound (Web Audio API)
+    function playDiceRollSound() {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+
+        // Multiple short percussive clicks simulating dice tumbling
+        const offsets = [0, 0.065, 0.13, 0.20, 0.28, 0.37];
+        offsets.forEach((offset, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = i === offsets.length - 1 ? 'triangle' : 'square';
+          const baseFreq = i === offsets.length - 1 ? 155 : 260 + Math.random() * 180;
+          osc.frequency.setValueAtTime(baseFreq, now + offset);
+          osc.frequency.exponentialRampToValueAtTime(55, now + offset + 0.045);
+
+          gain.gain.setValueAtTime(i === offsets.length - 1 ? 0.22 : 0.13, now + offset);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.05);
+
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + offset);
+          osc.stop(now + offset + 0.055);
+        });
+      } catch (e) {
+        // Ignore audio autoplay restriction if triggered before user gesture
+      }
+    }
+
+    function renderDiePips(el, val) {
+      const pipMap = {
+        1: [4],
+        2: [0, 8],
+        3: [0, 4, 8],
+        4: [0, 2, 6, 8],
+        5: [0, 2, 4, 6, 8],
+        6: [0, 2, 3, 5, 6, 8]
+      };
+      const active = pipMap[val] || [4];
+      let html = '';
+      for (let i = 0; i < 9; i++) {
+        html += active.includes(i) ? '<span class="die-pip"></span>' : '<span></span>';
+      }
+      el.innerHTML = html;
+    }
+
+    let firebaseInitPromise = null;
+    function initFirebase() {
+      if (firebaseInitPromise) return firebaseInitPromise;
+      firebaseInitPromise = (async () => {
+        try {
+          if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+            const firebaseConfig = JSON.parse(__firebase_config);
+            const app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+              const cred = await signInWithCustomToken(auth, __initial_auth_token);
+              if (cred?.user?.uid) currentUser = cred.user;
+            } else {
+              const cred = await signInAnonymously(auth);
+              if (cred?.user?.uid) currentUser = cred.user;
+            }
+            useCloud = true;
+          }
+        } catch (err) {
+          console.warn('Running in local single-session mode:', err);
+          useCloud = false;
+        }
+      })();
+      return firebaseInitPromise;
+    }
+
+    // --- UI HELPERS ---
+    function showToast(msg, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const el = document.createElement('div');
+      const colors = {
+        info: 'bg-slate-900 border-slate-700 text-white',
+        success: 'bg-emerald-950/95 border-emerald-500/50 text-emerald-200',
+        error: 'bg-rose-950/95 border-rose-500/50 text-rose-200',
+        warn: 'bg-amber-950/95 border-amber-500/50 text-amber-200'
+      };
+      el.className = `px-4 py-3 rounded-xl border shadow-xl text-xs font-bold flex items-center gap-2 transition-all ${colors[type] || colors.info}`;
+      el.innerHTML = `<i class="fa-solid fa-circle-info"></i> <span>${msg}</span>`;
+      container.appendChild(el);
+      setTimeout(() => {
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 300);
+      }, 3200);
+    }
+
+    function initLobbyPickers() {
+      const savedName = 'Player_' + Math.floor(100 + Math.random() * 900);
+      document.getElementById('player-name-input').value = savedName;
+
+      const colorContainer = document.getElementById('color-picker');
+      colorContainer.innerHTML = TOKEN_COLORS.map(c => `
+        <button type="button" onclick="window.selectTokenColor('${c}')"
+          class="w-7 h-7 rounded-full border-2 transition ${selectedColor === c ? 'border-white scale-110 ring-2 ring-violet-400/50' : 'border-white/20 opacity-80 hover:opacity-100'}"
+          style="background:${c}"></button>
+      `).join('');
+    }
+
+    window.selectTokenColor = (c) => {
+      selectedColor = c;
+      initLobbyPickers();
+    };
+
+    window.copyRoomCode = () => {
+      if (!currentRoomCode) return;
+      const temp = document.createElement('input');
+      temp.value = currentRoomCode;
+      document.body.appendChild(temp);
+      temp.select();
+      document.execCommand('copy');
+      temp.remove();
+      showToast(`Copied room code: ${currentRoomCode}`, 'success');
+    };
+
+    // --- ROOM SYNC HELPERS ---
+    function getRoomDocRef(code) {
+      return doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code);
+    }
+
+    const LOCAL_ROOMS_KEY = 'wealthup_rooms_v1';
+
+    function readLocalRooms() {
+      try {
+        return JSON.parse(localStorage.getItem(LOCAL_ROOMS_KEY) || '{}');
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function writeLocalRooms(rooms) {
+      try {
+        localStorage.setItem(LOCAL_ROOMS_KEY, JSON.stringify(rooms));
+      } catch (e) {
+        console.warn('Local room cache write failed:', e);
+      }
+    }
+
+    function getLocalRoom(code) {
+      const rooms = readLocalRooms();
+      return rooms[code] || null;
+    }
+
+    function saveLocalRoom(code, state) {
+      const rooms = readLocalRooms();
+      rooms[code] = state;
+      writeLocalRooms(rooms);
+    }
+
+    async function saveGameState(newState) {
+      gameState = newState;
+      if (currentRoomCode) {
+        saveLocalRoom(currentRoomCode, newState);
+      }
+      if (useCloud && db && currentRoomCode) {
+        try {
+          await setDoc(getRoomDocRef(currentRoomCode), newState);
+        } catch (e) {
+          console.error('Sync error:', e);
+        }
+      }
+      handleRoomStateUpdate(newState);
+    }
+
+    function subscribeToRoom(code) {
+      if (unsubscribeRoom) unsubscribeRoom();
+      if (useCloud && db) {
+        unsubscribeRoom = onSnapshot(getRoomDocRef(code), (snap) => {
+          if (snap.exists()) {
+            const remoteData = snap.data();
+            saveLocalRoom(code, remoteData);
+            handleRoomStateUpdate(remoteData);
+          }
+        }, (err) => {
+          console.error('Room listener error:', err);
+          const localData = getLocalRoom(code);
+          if (localData) handleRoomStateUpdate(localData);
+        });
+      }
+    }
+
+    window.addEventListener('storage', (event) => {
+      if (event.key === LOCAL_ROOMS_KEY && currentRoomCode) {
+        const updatedRoom = getLocalRoom(currentRoomCode);
+        if (updatedRoom) {
+          handleRoomStateUpdate(updatedRoom);
+        }
+      }
+    });
+
+    // --- ROOM CREATION & JOINING ---
+    window.createRoom = async () => {
+      await initFirebase();
+      const nameInput = document.getElementById('player-name-input').value.trim() || 'Host';
+      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+      currentRoomCode = code;
+
+      const initialState = {
+        roomCode: code,
+        hostId: currentUser.uid,
+        status: 'lobby',
+        settings: {
+          startingCash: 1500,
+          vacationCash: true,
+          prisonRent: true,
+          allowMortgage: true,
+          allowAuction: true
+        },
+        players: [{
+          id: currentUser.uid,
+          name: nameInput,
+          color: selectedColor,
+          isBot: false,
+          cash: 1500,
+          position: 0,
+          inJail: false,
+          jailTurns: 0,
+          skipTurn: false,
+          bankrupt: false
+        }],
+        properties: {}, // spaceId: { ownerId, houses (0..5 where 5=hotel), mortgaged }
+        currentTurnIndex: 0,
+        turnPhase: 'roll', // 'roll' | 'action' | 'auction' | 'end'
+        dice: [1, 1],
+        rollCounter: 0,
+        doublesCount: 0,
+        vacationPool: 0,
+        auction: null,
+        tradeOffer: null,
+        logs: [`${nameInput} created room ${code}.`],
+        chat: []
+      };
+
+      await saveGameState(initialState);
+      subscribeToRoom(code);
+      try {
+        const nextUrl = new URL(window.location.href);
+        nextUrl.searchParams.set('room', code);
+        window.history.replaceState({}, '', nextUrl.toString());
+      } catch (e) {
+        // Ignore history restrictions in sandboxed iframes
+      }
+      showToast(`Invite room ${code} created! Share the invite link with friends.`, 'success');
+    };
+
+    window.joinRoom = async (overrideCode = null) => {
+      await initFirebase();
+      const sourceCode = typeof overrideCode === 'string'
+        ? overrideCode
+        : document.getElementById('join-code-input').value;
+      const rawCode = String(sourceCode || '').trim().toUpperCase();
+      const code = rawCode.replace(/[^A-Z0-9]/g, '');
+      if (!code) return showToast('Enter a valid room code or invite link.', 'error');
+      document.getElementById('join-code-input').value = code;
+      const nameInput = document.getElementById('player-name-input').value.trim() || 'Guest';
+
+      let roomData = null;
+
+      if (useCloud && db) {
+        try {
+          const snap = await getDoc(getRoomDocRef(code));
+          if (snap.exists()) {
+            roomData = snap.data();
+          }
+        } catch (err) {
+          console.warn('Cloud room lookup failed, checking local cache:', err);
+        }
+      }
+
+      if (!roomData) {
+        roomData = getLocalRoom(code);
+      }
+
+      if (!roomData) {
+        return showToast(`Room "${code}" not found! Check the code or create a new room.`, 'error');
+      }
+
+      if (!Array.isArray(roomData.players)) {
+        roomData.players = [];
+      }
+      roomData.settings = Object.assign({
+        startingCash: 1500,
+        vacationCash: true,
+        prisonRent: true,
+        allowMortgage: true,
+        allowAuction: true
+      }, roomData.settings || {});
+      roomData.logs = Array.isArray(roomData.logs) ? roomData.logs : [];
+      roomData.chat = Array.isArray(roomData.chat) ? roomData.chat : [];
+
+      if (roomData.status !== 'lobby') return showToast('Game already in progress!', 'error');
+      if (roomData.players.length >= 6) return showToast('Room is full (max 6 players)!', 'error');
+
+      currentRoomCode = code;
+      if (!roomData.players.some(p => p.id === currentUser.uid)) {
+        const usedColors = roomData.players.map(p => p.color);
+        const availColor = TOKEN_COLORS.find(c => !usedColors.includes(c)) || selectedColor;
+        roomData.players.push({
+          id: currentUser.uid,
+          name: nameInput,
+          color: availColor,
+          isBot: false,
+          cash: roomData.settings.startingCash,
+          position: 0,
+          inJail: false,
+          jailTurns: 0,
+          skipTurn: false,
+          bankrupt: false
+        });
+        roomData.logs.push(`${nameInput} joined the room.`);
+        await saveGameState(roomData);
+      } else {
+        handleRoomStateUpdate(roomData);
+      }
+      subscribeToRoom(code);
+      showToast(`Joined room ${code}!`, 'success');
+    };
+
+    window.leaveRoom = () => {
+      if (unsubscribeRoom) unsubscribeRoom();
+      if (botTimer) clearTimeout(botTimer);
+      currentRoomCode = null;
+      gameState = null;
+      document.getElementById('game-screen').classList.add('hidden');
+      document.getElementById('lobby-screen').classList.remove('hidden');
+      document.getElementById('waiting-room-active').classList.add('hidden');
+      document.getElementById('waiting-room-empty').classList.remove('hidden');
+      document.getElementById('header-room-info').classList.add('hidden');
+      document.getElementById('header-room-info').classList.remove('flex');
+    };
+
+    window.addBotPlayer = async () => {
+      if (!gameState || gameState.hostId !== currentUser.uid) return;
+      if (gameState.players.length >= 6) return showToast('Max 6 players reached.', 'warn');
+
+      const botNames = ['Atlas AI', 'Nova Bot', 'Titan AI', 'Vega Bot', 'Orion AI'];
+      const usedNames = gameState.players.map(p => p.name);
+      const name = botNames.find(n => !usedNames.includes(n)) || `Bot_${gameState.players.length + 1}`;
+      const usedColors = gameState.players.map(p => p.color);
+      const color = TOKEN_COLORS.find(c => !usedColors.includes(c)) || TOKEN_COLORS[gameState.players.length % TOKEN_COLORS.length];
+
+      gameState.players.push({
+        id: 'bot_' + Math.random().toString(36).substring(2, 8),
+        name,
+        color,
+        isBot: true,
+        cash: gameState.settings.startingCash,
+        position: 0,
+        inJail: false,
+        jailTurns: 0,
+        skipTurn: false,
+        bankrupt: false
+      });
+      gameState.logs.push(`${name} joined the lobby.`);
+      await saveGameState(gameState);
+    };
+
+    window.removeLobbyPlayer = async (pid) => {
+      if (!gameState || gameState.hostId !== currentUser.uid) return;
+      gameState.players = gameState.players.filter(p => p.id !== pid);
+      await saveGameState(gameState);
+    };
+
+    window.updateRoomSettings = async () => {
+      if (!gameState || gameState.hostId !== currentUser.uid) return;
+      const startingCash = Math.max(200, Math.min(50000, parseInt(document.getElementById('setting-starting-cash').value) || 1500));
+      gameState.settings = {
+        startingCash,
+        vacationCash: document.getElementById('setting-vacation-cash').checked,
+        prisonRent: document.getElementById('setting-prison-rent').checked,
+        allowMortgage: document.getElementById('setting-mortgage').checked,
+        allowAuction: document.getElementById('setting-auction').checked
+      };
+      gameState.players.forEach(p => p.cash = startingCash);
+      await saveGameState(gameState);
+    };
+
+    window.startGame = async () => {
+      if (!gameState || gameState.hostId !== currentUser.uid) return;
+      if (gameState.players.length < 2) return showToast('Add at least 1 more player or AI Bot!', 'error');
+
+      const cash = gameState.settings.startingCash;
+      gameState.players.forEach(p => {
+        p.cash = cash;
+        p.position = 0;
+        p.inJail = false;
+        p.jailTurns = 0;
+        p.skipTurn = false;
+        p.bankrupt = false;
+      });
+      gameState.status = 'playing';
+      gameState.currentTurnIndex = 0;
+      gameState.turnPhase = 'roll';
+      gameState.logs.push('The global match has begun!');
+      await saveGameState(gameState);
+    };
+
+    // --- MAIN STATE RENDER DISPATCHER ---
+    function handleRoomStateUpdate(state) {
+      gameState = state;
+      document.getElementById('header-room-code').textContent = state.roomCode;
+      document.getElementById('header-room-info').classList.remove('hidden');
+      document.getElementById('header-room-info').classList.add('flex');
+
+      if (state.status === 'lobby') {
+        document.getElementById('lobby-screen').classList.remove('hidden');
+        document.getElementById('game-screen').classList.add('hidden');
+        renderLobby(state);
+      } else {
+        document.getElementById('lobby-screen').classList.add('hidden');
+        document.getElementById('game-screen').classList.remove('hidden');
+        renderGame(state);
+        scheduleBotIfNeeded(state);
+      }
+    }
+
+    function renderLobby(state) {
+      document.getElementById('waiting-room-empty').classList.add('hidden');
+      document.getElementById('waiting-room-active').classList.remove('hidden');
+      document.getElementById('lobby-room-code').textContent = state.roomCode;
+      document.getElementById('lobby-player-count').textContent = state.players.length;
+
+      const isHost = state.hostId === currentUser.uid;
+      document.getElementById('add-bot-btn').classList.toggle('hidden', !isHost);
+      document.getElementById('start-game-btn').classList.toggle('hidden', !isHost);
+
+      // Sync rule inputs
+      const cashInput = document.getElementById('setting-starting-cash');
+      const vacInput = document.getElementById('setting-vacation-cash');
+      const prisonInput = document.getElementById('setting-prison-rent');
+      const mortInput = document.getElementById('setting-mortgage');
+      const aucInput = document.getElementById('setting-auction');
+
+      cashInput.value = state.settings.startingCash;
+      vacInput.checked = state.settings.vacationCash;
+      prisonInput.checked = state.settings.prisonRent;
+      mortInput.checked = state.settings.allowMortgage;
+      aucInput.checked = state.settings.allowAuction;
+
+      [cashInput, vacInput, prisonInput, mortInput, aucInput].forEach(el => el.disabled = !isHost);
+
+      document.getElementById('lobby-players-list').innerHTML = state.players.map(p => `
+        <div class="flex items-center justify-between bg-[#0d111c] border border-slate-800 px-3.5 py-2.5 rounded-xl">
+          <div class="flex items-center gap-2.5">
+            <span class="w-6 h-6 rounded-full border-2 border-white shadow shrink-0" style="background:${p.color}"></span>
+            <div>
+              <div class="text-xs font-bold text-white flex items-center gap-1.5">
+                ${p.name}
+                ${p.id === state.hostId ? '<span class="text-[10px] px-1.5 py-0.2 bg-amber-500/20 text-amber-300 rounded">HOST</span>' : ''}
+                ${p.isBot ? '<span class="text-[10px] px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 rounded">BOT</span>' : ''}
+              </div>
+              <div class="text-[11px] text-slate-400">$${state.settings.startingCash.toLocaleString()}</div>
+            </div>
+          </div>
+          ${isHost && p.id !== currentUser.uid ? `
+            <button onclick="window.removeLobbyPlayer('${p.id}')" class="text-slate-500 hover:text-rose-400 p-1">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          ` : ''}
+        </div>
+      `).join('');
+    }
+
+    // --- BOARD COORDINATE MAPPING (CLOCKWISE FROM TOP-LEFT) ---
+    function getGridPosition(index) {
+      if (index <= 10) return { row: 1, col: index + 1 }; // Top: Left to Right
+      if (index <= 20) return { row: index - 9, col: 11 }; // Right: Top to Bottom
+      if (index <= 30) return { row: 11, col: 31 - index }; // Bottom: Right to Left
+      return { row: 41 - index, col: 1 }; // Left: Bottom to Top
+    }
+
+    // --- MONOPOLY & RENT HELPERS ---
+    function hasCountryMonopoly(state, ownerId, countryKey) {
+      if (!ownerId || !countryKey) return false;
+      const countryProps = BOARD_SPACES.filter(s => s.type === 'property' && s.country === countryKey);
+      return countryProps.length > 0 && countryProps.every(s => {
+        const propState = state.properties[s.id];
+        return propState && propState.ownerId === ownerId && !propState.mortgaged;
+      });
+    }
+
+    function calculateRent(state, space, diceSum = 7) {
+      const propState = state.properties[space.id];
+      if (!propState || !propState.ownerId || propState.mortgaged) return 0;
+
+      const owner = state.players.find(p => p.id === propState.ownerId);
+      if (!owner || owner.bankrupt) return 0;
+      if (owner.inJail && !state.settings.prisonRent) return 0;
+
+      if (space.type === 'property') {
+        const houses = propState.houses || 0;
+        if (houses > 0) {
+          return space.rent[houses];
+        }
+        const base = space.rent[0];
+        return hasCountryMonopoly(state, owner.id, space.country) ? base * 2 : base;
+      }
+
+      if (space.type === 'airport') {
+        const ownedAirports = BOARD_SPACES.filter(s =>
+          s.type === 'airport' &&
+          state.properties[s.id]?.ownerId === owner.id &&
+          !state.properties[s.id]?.mortgaged
+        ).length;
+        return space.rent[Math.max(0, ownedAirports - 1)] || 25;
+      }
+
+      if (space.type === 'utility') {
+        const ownedUtils = BOARD_SPACES.filter(s =>
+          s.type === 'utility' &&
+          state.properties[s.id]?.ownerId === owner.id &&
+          !state.properties[s.id]?.mortgaged
+        ).length;
+        return ownedUtils >= 2 ? diceSum * 10 : diceSum * 4;
+      }
+
+      return 0;
+    }
+
+    // --- RENDER ACTIVE GAME ---
+    function renderGame(state) {
+      renderBoardTiles(state);
+      renderSidebarPlayers(state);
+      renderMyPortfolio(state);
+      renderFeed(state);
+      renderCenterControls(state);
+      renderAuctionModalIfOpen(state);
+      renderIncomingTradeIfOpen(state);
+    }
+
+    function renderBoardTiles(state) {
+      const grid = document.getElementById('board-grid');
+      // Remove existing tiles while keeping .board-center
+      grid.querySelectorAll('.tile').forEach(el => el.remove());
+
+      BOARD_SPACES.forEach((space) => {
+        const { row, col } = getGridPosition(space.id);
+        const propState = state.properties[space.id];
+        const owner = propState ? state.players.find(p => p.id === propState.ownerId) : null;
+        const playersHere = state.players.filter(p => !p.bankrupt && p.position === space.id);
+
+        const tile = document.createElement('div');
+        tile.className = `tile ${propState?.mortgaged ? 'mortgaged' : ''}`;
+        tile.style.gridRow = row;
+        tile.style.gridColumn = col;
+        tile.onclick = () => window.openPropertyModal(space.id);
+
+        let headerHtml = '';
+        let bodyHtml = '';
+        let footerHtml = '';
+
+        if (space.type === 'property') {
+          const houses = propState?.houses || 0;
+          let devBadge = '';
+          if (houses === 5) {
+            devBadge = `<span class="text-[7px] sm:text-[10px] font-black text-amber-300 bg-amber-950/90 px-0.5 sm:px-1 rounded border border-amber-500/40">H</span>`;
+          } else if (houses > 0) {
+            devBadge = `<span class="text-[7px] sm:text-[9px] font-bold text-emerald-300">${houses}🏠</span>`;
+          }
+
+          headerHtml = `
+            <div class="flag-header">
+              ${getFlagImg(space.country)}
+              ${devBadge}
+            </div>
+          `;
+          bodyHtml = `<div class="px-0.5 text-[7px] sm:text-[11px] font-bold text-slate-100 leading-[1.05] line-clamp-2">${space.name}</div>`;
+          footerHtml = `<div class="pb-0.5 text-[7px] sm:text-[10px] font-extrabold text-emerald-400">$${space.price}</div>`;
+        } else if (space.type === 'airport') {
+          headerHtml = `
+            <div class="flag-header">
+              ${getFlagImg(space.country)}
+              <i class="fa-solid fa-plane text-[7px] sm:text-[10px] text-sky-400"></i>
+            </div>
+          `;
+          bodyHtml = `<div class="px-0.5 text-[7px] sm:text-[11px] font-bold text-sky-200 leading-[1.05] line-clamp-2">${space.name}</div>`;
+          footerHtml = `<div class="pb-0.5 text-[7px] sm:text-[10px] font-extrabold text-sky-400">$${space.price}</div>`;
+        } else if (space.type === 'utility') {
+          const icon = space.id === 12 ? 'fa-solar-panel text-amber-400' : 'fa-droplet text-cyan-400';
+          headerHtml = `<div class="flag-header"><i class="fa-solid ${icon} text-[8px] sm:text-xs"></i></div>`;
+          bodyHtml = `<div class="px-0.5 text-[7px] sm:text-[11px] font-bold text-slate-200 leading-[1.05]">${space.name}</div>`;
+          footerHtml = `<div class="pb-0.5 text-[7px] sm:text-[10px] font-extrabold text-slate-300">$${space.price}</div>`;
+        } else if (space.type === 'start') {
+          bodyHtml = `
+            <div class="flex flex-col items-center justify-center h-full p-0.5 sm:p-1 bg-gradient-to-br from-emerald-500/20 to-teal-600/10 w-full">
+              <i class="fa-solid fa-flag-checkered text-emerald-400 text-xs sm:text-lg mb-0.5"></i>
+              <div class="text-[8px] sm:text-[11px] font-black text-emerald-300 leading-none">START</div>
+              <div class="text-[6px] sm:text-[9px] text-emerald-200/80 font-semibold leading-tight">+$200/+$300</div>
+            </div>
+          `;
+        } else if (space.type === 'jail') {
+          bodyHtml = `
+            <div class="flex flex-col items-center justify-center h-full p-0.5 sm:p-1 bg-slate-800/40 w-full">
+              <i class="fa-solid fa-handcuffs text-amber-400 text-xs sm:text-lg mb-0.5"></i>
+              <div class="text-[7px] sm:text-[10px] font-black text-amber-300 leading-none">PRISON</div>
+              <div class="text-[6px] sm:text-[8px] text-slate-400 leading-tight">Visit</div>
+            </div>
+          `;
+        } else if (space.type === 'gotojail') {
+          bodyHtml = `
+            <div class="flex flex-col items-center justify-center h-full p-0.5 sm:p-1 bg-rose-500/15 w-full">
+              <i class="fa-solid fa-gavel text-rose-400 text-xs sm:text-lg mb-0.5"></i>
+              <div class="text-[7px] sm:text-[10px] font-black text-rose-300 leading-tight">GO JAIL</div>
+            </div>
+          `;
+        } else if (space.type === 'vacation') {
+          bodyHtml = `
+            <div class="flex flex-col items-center justify-center h-full p-0.5 sm:p-1 bg-sky-500/15 w-full">
+              <i class="fa-solid fa-umbrella-beach text-sky-400 text-xs sm:text-lg mb-0.5"></i>
+              <div class="text-[7px] sm:text-[10px] font-black text-sky-300 leading-none">VACATION</div>
+              <div class="text-[6px] sm:text-[8px] text-slate-400 leading-tight">Skip 1</div>
+            </div>
+          `;
+        } else if (space.type === 'chance') {
+          bodyHtml = `
+            <div class="flex flex-col items-center justify-center h-full p-0.5 sm:p-1">
+              <i class="fa-solid fa-bolt text-amber-400 text-[10px] sm:text-base mb-0.5"></i>
+              <div class="text-[7px] sm:text-[10px] font-extrabold text-amber-300 leading-none">CHANCE</div>
+            </div>
+          `;
+        } else if (space.type === 'chest') {
+          bodyHtml = `
+            <div class="flex flex-col items-center justify-center h-full p-0.5 sm:p-1">
+              <i class="fa-solid fa-box-open text-indigo-400 text-[10px] sm:text-base mb-0.5"></i>
+              <div class="text-[7px] sm:text-[9px] font-extrabold text-indigo-300 leading-none">CHEST</div>
+            </div>
+          `;
+        } else if (space.type === 'tax') {
+          bodyHtml = `
+            <div class="flex flex-col items-center justify-center h-full p-0.5 sm:p-1">
+              <i class="fa-solid fa-receipt text-rose-400 text-[9px] sm:text-sm mb-0.5"></i>
+              <div class="text-[6px] sm:text-[9px] font-extrabold text-rose-300 leading-none line-clamp-1">${space.name}</div>
+              <div class="text-[7px] sm:text-[9px] font-bold text-slate-300 leading-tight">-$${space.amount}</div>
+            </div>
+          `;
+        }
+
+        const ownerIndicator = owner
+          ? `<div class="owner-banner" style="background:${owner.color}" title="Owned by ${owner.name}"></div>`
+          : '';
+
+        if (owner) {
+          tile.style.borderColor = owner.color;
+        }
+
+        const tokensHtml = playersHere.length > 0 ? `
+          <div class="absolute inset-0 flex flex-wrap items-center justify-center gap-1 pointer-events-none p-0.5">
+            ${playersHere.map(p => `
+              <span class="token-badge" style="background:${p.color}" title="${p.name}"></span>
+            `).join('')}
+          </div>
+        ` : '';
+
+        tile.innerHTML = `${headerHtml}${bodyHtml}${footerHtml}${ownerIndicator}${tokensHtml}`;
+        grid.appendChild(tile);
+      });
+    }
+
+    function renderCenterControls(state) {
+      const activePlayer = state.players[state.currentTurnIndex];
+      const isMyTurn = activePlayer && activePlayer.id === currentUser.uid && !activePlayer.isBot;
+
+      document.getElementById('turn-indicator-dot').style.background = activePlayer?.color || '#10b981';
+      document.getElementById('turn-indicator-text').textContent = activePlayer
+        ? `${activePlayer.name}'s Turn ${activePlayer.inJail ? '(In Prison)' : ''}`
+        : 'Game Over';
+
+      const vacBadge = document.getElementById('vacation-pool-badge');
+      if (state.settings.vacationCash) {
+        vacBadge.classList.remove('hidden');
+        vacBadge.classList.add('flex');
+        document.getElementById('vacation-pool-amount').textContent = (state.vacationPool || 0).toLocaleString();
+      } else {
+        vacBadge.classList.add('hidden');
+      }
+
+      // Dice display & bounce animation
+      const d1El = document.getElementById('die-1');
+      const d2El = document.getElementById('die-2');
+      renderDiePips(d1El, state.dice[0]);
+      renderDiePips(d2El, state.dice[1]);
+
+      const rollKey = `${state.rollCounter || 0}_${state.dice[0]}_${state.dice[1]}`;
+      if (state.rollCounter && rollKey !== lastPlayedDiceRollKey) {
+        lastPlayedDiceRollKey = rollKey;
+        playDiceRollSound();
+        d1El.classList.remove('dice-rolling');
+        d2El.classList.remove('dice-rolling');
+        void d1El.offsetWidth;
+        d1El.classList.add('dice-rolling');
+        d2El.classList.add('dice-rolling');
+      }
+
+      const actionsEl = document.getElementById('center-actions');
+      const mobileActionsEl = document.getElementById('mobile-dock-actions');
+      const mobileTurnEl = document.getElementById('mobile-turn-label');
+      const mobileCashEl = document.getElementById('mobile-cash-label');
+      const me = state.players.find(p => p.id === currentUser.uid);
+
+      if (mobileTurnEl) {
+        mobileTurnEl.textContent = activePlayer ? `${activePlayer.name}'s Turn` : 'Game Over';
+      }
+      if (mobileCashEl && me) {
+        mobileCashEl.textContent = `$${me.cash.toLocaleString()}`;
+      }
+      const statusEl = document.getElementById('center-status-message');
+
+      // Check Winner
+      const alivePlayers = state.players.filter(p => !p.bankrupt);
+      if (alivePlayers.length === 1) {
+        statusEl.textContent = `🏆 ${alivePlayers[0].name} wins the global monopoly!`;
+        const winBtn = `
+          <button onclick="window.leaveRoom()" class="px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs shadow-lg">
+            Back to Lobby
+          </button>
+        `;
+        actionsEl.innerHTML = winBtn;
+        if (mobileActionsEl) mobileActionsEl.innerHTML = winBtn;
+        return;
+      }
+
+      if (!isMyTurn) {
+        statusEl.textContent = state.turnPhase === 'auction'
+          ? 'Live Property Auction in progress...'
+          : `Waiting for ${activePlayer.name} to make a move...`;
+        actionsEl.innerHTML = '';
+        if (mobileActionsEl) mobileActionsEl.innerHTML = '';
+        return;
+      }
+
+      // My Turn Controls
+      if (state.turnPhase === 'roll') {
+        if (activePlayer.inJail) {
+          statusEl.textContent = `Prison (Turn ${activePlayer.jailTurns + 1}/3). Doubles, 3rd turn, or $50 bail.`;
+          const prisonBtns = `
+            <button onclick="window.rollDiceTurn()" class="px-3 py-1.5 sm:px-5 sm:py-3 rounded-lg sm:rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-extrabold text-[10px] sm:text-sm shadow-lg transition">
+              <i class="fa-solid fa-dice mr-1"></i> Roll
+            </button>
+            ${activePlayer.cash >= 50 ? `
+              <button onclick="window.payBailAndRoll()" class="px-3 py-1.5 sm:px-4 sm:py-3 rounded-lg sm:rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-[10px] sm:text-sm shadow-lg transition">
+                $50 Bail
+              </button>
+            ` : ''}
+          `;
+          actionsEl.innerHTML = prisonBtns;
+          if (mobileActionsEl) mobileActionsEl.innerHTML = prisonBtns;
+        } else {
+          statusEl.textContent = 'Your turn! Roll the dice to advance.';
+          const rollBtn = `
+            <button onclick="window.rollDiceTurn()" class="px-4 py-1.5 sm:px-6 sm:py-3 rounded-lg sm:rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-[11px] sm:text-sm shadow-lg shadow-emerald-500/25 transition">
+              <i class="fa-solid fa-dice mr-1"></i> Roll Dice
+            </button>
+          `;
+          actionsEl.innerHTML = rollBtn;
+          if (mobileActionsEl) mobileActionsEl.innerHTML = rollBtn;
+        }
+      } else if (state.turnPhase === 'action') {
+        const space = BOARD_SPACES[activePlayer.position];
+        const isUnownedPurchasable = ['property', 'airport', 'utility'].includes(space.type) && !state.properties[space.id];
+
+        if (isUnownedPurchasable) {
+          const canAfford = activePlayer.cash >= space.price;
+          statusEl.textContent = `${space.name} — $${space.price}`;
+          const propBtns = `
+            ${canAfford ? `
+              <button onclick="window.buyCurrentProperty()" class="px-3 py-1.5 sm:px-5 sm:py-2.5 rounded-lg sm:rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-[10px] sm:text-sm shadow-lg transition">
+                Buy $${space.price}
+              </button>
+            ` : ''}
+            ${state.settings.allowAuction ? `
+              <button onclick="window.startPropertyAuction(${space.id})" class="px-3 py-1.5 sm:px-5 sm:py-2.5 rounded-lg sm:rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-[10px] sm:text-sm shadow-lg transition">
+                <i class="fa-solid fa-gavel mr-1"></i> Auction
+              </button>
+            ` : `
+              <button onclick="window.endPlayerTurn()" class="px-3 py-1.5 sm:px-5 sm:py-2.5 rounded-lg sm:rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-bold text-[10px] sm:text-sm transition">
+                Pass
+              </button>
+            `}
+          `;
+          actionsEl.innerHTML = propBtns;
+          if (mobileActionsEl) mobileActionsEl.innerHTML = propBtns;
+        } else {
+          statusEl.textContent = 'Manage properties or end turn.';
+          const endBtn = `
+            <button onclick="window.endPlayerTurn()" class="px-4 py-1.5 sm:px-6 sm:py-2.5 rounded-lg sm:rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-extrabold text-[11px] sm:text-sm shadow-lg transition">
+              End Turn <i class="fa-solid fa-arrow-right ml-1"></i>
+            </button>
+          `;
+          actionsEl.innerHTML = endBtn;
+          if (mobileActionsEl) mobileActionsEl.innerHTML = endBtn;
+        }
+      } else if (state.turnPhase === 'end') {
+        statusEl.textContent = 'Turn complete.';
+        const endBtn = `
+          <button onclick="window.endPlayerTurn()" class="px-4 py-1.5 sm:px-6 sm:py-2.5 rounded-lg sm:rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-extrabold text-[11px] sm:text-sm shadow-lg transition">
+            End Turn <i class="fa-solid fa-arrow-right ml-1"></i>
+          </button>
+        `;
+        actionsEl.innerHTML = endBtn;
+        if (mobileActionsEl) mobileActionsEl.innerHTML = endBtn;
+      }
+    }
+
+    function renderSidebarPlayers(state) {
+      const container = document.getElementById('game-players-list');
+      container.innerHTML = state.players.map((p, idx) => {
+        const isCurrent = idx === state.currentTurnIndex && !p.bankrupt;
+        const ownedCount = Object.values(state.properties).filter(pr => pr.ownerId === p.id).length;
+
+        return `
+          <div class="p-3 rounded-xl border transition ${isCurrent ? 'bg-slate-800/90 border-violet-500 shadow-md' : 'bg-[#0d111c] border-slate-800/90'} ${p.bankrupt ? 'opacity-45' : ''}">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <span class="w-5 h-5 rounded-full border-2 border-white shadow shrink-0" style="background:${p.color}"></span>
+                <div>
+                  <div class="text-xs font-extrabold text-white flex items-center gap-1.5">
+                    ${p.name}
+                    ${p.inJail ? '<span class="text-[9px] px-1.5 py-0.2 bg-amber-500/20 text-amber-300 rounded">PRISON</span>' : ''}
+                    ${p.skipTurn ? '<span class="text-[9px] px-1.5 py-0.2 bg-sky-500/20 text-sky-300 rounded">VACATION</span>' : ''}
+                    ${p.bankrupt ? '<span class="text-[9px] px-1.5 py-0.2 bg-rose-500/20 text-rose-300 rounded">OUT</span>' : ''}
+                  </div>
+                  <div class="text-[11px] text-slate-400">${ownedCount} properties</div>
+                </div>
+              </div>
+              <div class="text-sm font-black text-emerald-400">$${p.cash.toLocaleString()}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderMyPortfolio(state) {
+      const me = state.players.find(p => p.id === currentUser.uid);
+      const cashDisplayEl = document.getElementById('my-cash-display');
+      if (me && cashDisplayEl) {
+        cashDisplayEl.textContent = `$${me.cash.toLocaleString()}`;
+      }
+
+      const myProps = BOARD_SPACES.filter(s => state.properties[s.id]?.ownerId === currentUser.uid);
+      const container = document.getElementById('my-properties-list');
+      if (!container) return;
+
+      if (myProps.length === 0) {
+        container.innerHTML = `<div class="text-center py-8 text-xs text-slate-500">You don't own any cities or airports yet.</div>`;
+        return;
+      }
+
+      container.innerHTML = myProps.map(s => {
+        const ps = state.properties[s.id];
+        const monopoly = s.type === 'property' && hasCountryMonopoly(state, currentUser.uid, s.country);
+        const houses = ps.houses || 0;
+        const devLabel = houses === 5 ? '1 Hotel' : houses > 0 ? `${houses} House${houses > 1 ? 's' : ''}` : 'Base Rent';
+
+        return `
+          <div onclick="window.openPropertyModal(${s.id})"
+            class="p-2.5 rounded-xl bg-[#0d111c] hover:bg-slate-800/80 border ${monopoly ? 'border-amber-500/50' : 'border-slate-800'} cursor-pointer transition flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              ${s.country ? getFlagImg(s.country) : '<i class="fa-solid fa-bolt text-amber-400 text-xs"></i>'}
+              <div>
+                <div class="text-xs font-bold text-white flex items-center gap-1.5">
+                  ${s.name}
+                  ${ps.mortgaged ? '<span class="text-[9px] bg-rose-500/20 text-rose-300 px-1.5 rounded">MORTGAGED</span>' : ''}
+                </div>
+                <div class="text-[10px] text-slate-400">
+                  ${monopoly ? '<span class="text-amber-400 font-bold">Country Monopoly • </span>' : ''}${devLabel}
+                </div>
+              </div>
+            </div>
+            <div class="text-xs font-extrabold text-emerald-400">$${calculateRent(state, s)}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderFeed(state) {
+      const logList = document.getElementById('game-log-list');
+      logList.innerHTML = (state.logs || []).slice(-45).map(entry => `
+        <div class="px-2.5 py-1.5 rounded-lg bg-[#0d111c] border border-slate-800/70 text-slate-300 leading-snug">
+          ${entry}
+        </div>
+      `).join('');
+      logList.scrollTop = logList.scrollHeight;
+
+      const chatList = document.getElementById('game-chat-list');
+      chatList.innerHTML = (state.chat || []).slice(-40).map(msg => `
+        <div class="px-2.5 py-1.5 rounded-lg bg-[#0d111c] border border-slate-800/70">
+          <span class="font-extrabold text-violet-400">${msg.sender}:</span>
+          <span class="text-slate-200">${msg.text}</span>
+        </div>
+      `).join('');
+      chatList.scrollTop = chatList.scrollHeight;
+    }
+
+    window.switchFeedTab = (tab) => {
+      activeFeedTab = tab;
+      document.getElementById('game-log-list').classList.toggle('hidden', tab !== 'log');
+      document.getElementById('game-chat-list').classList.toggle('hidden', tab !== 'chat');
+      document.getElementById('tab-log-btn').className = tab === 'log'
+        ? 'text-xs font-bold px-2.5 py-1 rounded-lg bg-violet-600 text-white'
+        : 'text-xs font-bold px-2.5 py-1 rounded-lg text-slate-400 hover:text-white';
+      document.getElementById('tab-chat-btn').className = tab === 'chat'
+        ? 'text-xs font-bold px-2.5 py-1 rounded-lg bg-violet-600 text-white'
+        : 'text-xs font-bold px-2.5 py-1 rounded-lg text-slate-400 hover:text-white';
+    };
+
+    window.sendChatMessage = async (e) => {
+      e.preventDefault();
+      if (!gameState) return;
+      const input = document.getElementById('chat-input');
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+      const me = gameState.players.find(p => p.id === currentUser.uid);
+      gameState.chat.push({ sender: me?.name || 'Player', text });
+      await saveGameState(gameState);
+    };
+
+    // --- DICE ROLLING, MOVEMENT & TILE RESOLUTION ---
+    window.payBailAndRoll = async () => {
+      if (!gameState) return;
+      const player = gameState.players[gameState.currentTurnIndex];
+      if (player.id !== currentUser.uid || !player.inJail || player.cash < 50) return;
+
+      player.cash -= 50;
+      player.inJail = false;
+      player.jailTurns = 0;
+      if (gameState.settings.vacationCash) {
+        gameState.vacationPool = (gameState.vacationPool || 0) + 50;
+      }
+      gameState.logs.push(`${player.name} paid $50 bail and left Prison.`);
+      await window.rollDiceTurn();
+    };
+
+    window.rollDiceTurn = async () => {
+      if (!gameState || gameState.turnPhase !== 'roll') return;
+      const player = gameState.players[gameState.currentTurnIndex];
+      if (player.id !== currentUser.uid && !player.isBot) return;
+
+      const d1 = Math.floor(Math.random() * 6) + 1;
+      const d2 = Math.floor(Math.random() * 6) + 1;
+      const isDoubles = d1 === d2;
+      const total = d1 + d2;
+      gameState.dice = [d1, d2];
+      gameState.rollCounter = (gameState.rollCounter || 0) + 1;
+
+      // Handle Prison Roll Logic
+      if (player.inJail) {
+        player.jailTurns = (player.jailTurns || 0) + 1;
+        if (isDoubles || player.jailTurns >= 3) {
+          player.inJail = false;
+          player.jailTurns = 0;
+          gameState.logs.push(`${player.name} rolled ${d1}+${d2} and escaped Prison!`);
+          await movePlayerSteps(player, total, false);
+        } else {
+          gameState.logs.push(`${player.name} rolled ${d1}+${d2} in Prison (Attempt ${player.jailTurns}/3).`);
+          gameState.turnPhase = 'end';
+          await saveGameState(gameState);
+        }
+        return;
+      }
+
+      // Consecutive Doubles Check
+      if (isDoubles) {
+        gameState.doublesCount = (gameState.doublesCount || 0) + 1;
+        if (gameState.doublesCount >= 3) {
+          gameState.doublesCount = 0;
+          sendPlayerToJail(player, 'rolled 3 consecutive doubles');
+          gameState.turnPhase = 'end';
+          await saveGameState(gameState);
+          return;
+        }
+      } else {
+        gameState.doublesCount = 0;
+      }
+
+      gameState.logs.push(`${player.name} rolled ${d1} + ${d2} (${total})${isDoubles ? ' — DOUBLES!' : ''}.`);
+      await movePlayerSteps(player, total, isDoubles);
+    };
+
+    function sendPlayerToJail(player, reason) {
+      player.position = 10; // Jail space
+      player.inJail = true;
+      player.jailTurns = 0;
+      gameState.doublesCount = 0;
+      gameState.logs.push(`🚨 ${player.name} was sent to Prison (${reason})!`);
+    }
+
+    async function movePlayerSteps(player, steps, rolledDoubles) {
+      const oldPos = player.position;
+      const rawNewPos = oldPos + steps;
+      const newPos = rawNewPos % 40;
+
+      // Check START pass vs exact landing
+      if (newPos === 0) {
+        player.cash += 300;
+        gameState.logs.push(`🎉 ${player.name} landed directly on START and collected $300!`);
+      } else if (rawNewPos >= 40) {
+        player.cash += 200;
+        gameState.logs.push(`💵 ${player.name} crossed START and collected $200.`);
+      }
+
+      player.position = newPos;
+      const space = BOARD_SPACES[newPos];
+      await resolveLandedSpace(player, space, steps, rolledDoubles);
+    }
+
+    async function resolveLandedSpace(player, space, diceSum, rolledDoubles) {
+      if (space.type === 'start' || space.type === 'jail') {
+        gameState.turnPhase = rolledDoubles && !player.inJail ? 'roll' : 'end';
+      } else if (space.type === 'gotojail') {
+        sendPlayerToJail(player, 'landed on Go To Jail');
+        gameState.turnPhase = 'end';
+      } else if (space.type === 'vacation') {
+        player.skipTurn = true;
+        let bonusMsg = '';
+        if (gameState.settings.vacationCash && (gameState.vacationPool || 0) > 0) {
+          const pool = gameState.vacationPool;
+          player.cash += pool;
+          gameState.vacationPool = 0;
+          bonusMsg = ` and collected the $${pool} Vacation Pool!`;
+        }
+        gameState.logs.push(`🏖️ ${player.name} arrived at Vacation (skips next turn)${bonusMsg}`);
+        gameState.turnPhase = 'end';
+      } else if (space.type === 'tax') {
+        chargePlayer(player, space.amount, null, space.name);
+        gameState.turnPhase = rolledDoubles && !player.inJail ? 'roll' : 'end';
+      } else if (space.type === 'chance' || space.type === 'chest') {
+        const deck = space.type === 'chance' ? CHANCE_CARDS : CHEST_CARDS;
+        const card = deck[Math.floor(Math.random() * deck.length)];
+        gameState.logs.push(`🃏 ${player.name} drew ${space.name}: "${card.text}"`);
+        await executeCard(player, card, rolledDoubles);
+        return;
+      } else if (['property', 'airport', 'utility'].includes(space.type)) {
+        const propState = gameState.properties[space.id];
+        if (!propState) {
+          // Unowned property
+          const canAfford = player.cash >= space.price;
+          if (!canAfford && gameState.settings.allowAuction) {
+            gameState.logs.push(`${player.name} cannot afford ${space.name} ($${space.price}) — starting Auction!`);
+            await startAuctionInternal(space.id);
+            return;
+          }
+          gameState.turnPhase = 'action';
+        } else if (propState.ownerId !== player.id) {
+          // Owned by another player
+          const rent = calculateRent(gameState, space, diceSum);
+          const owner = gameState.players.find(p => p.id === propState.ownerId);
+          if (rent > 0 && owner) {
+            chargePlayer(player, rent, owner, `${space.name} rent`);
+          } else if (propState.mortgaged) {
+            gameState.logs.push(`${space.name} is mortgaged — no rent due.`);
+          } else if (owner?.inJail && !gameState.settings.prisonRent) {
+            gameState.logs.push(`${owner.name} is in Prison — no rent collected.`);
+          }
+          gameState.turnPhase = rolledDoubles && !player.inJail ? 'roll' : 'end';
+        } else {
+          // Owned by self
+          gameState.turnPhase = rolledDoubles && !player.inJail ? 'roll' : 'end';
+        }
+      }
+
+      await saveGameState(gameState);
+    }
+
+    async function executeCard(player, card, rolledDoubles) {
+      if (card.action === 'jail') {
+        sendPlayerToJail(player, 'Community Chest punishment');
+        gameState.turnPhase = 'end';
+        await saveGameState(gameState);
+      } else if (card.action === 'cash') {
+        player.cash += card.amount;
+        gameState.turnPhase = rolledDoubles ? 'roll' : 'end';
+        await saveGameState(gameState);
+      } else if (card.action === 'tax') {
+        chargePlayer(player, card.amount, null, 'Card fee');
+        gameState.turnPhase = rolledDoubles ? 'roll' : 'end';
+        await saveGameState(gameState);
+      } else if (card.action === 'repairs') {
+        let totalFee = 0;
+        Object.entries(gameState.properties).forEach(([sid, ps]) => {
+          if (ps.ownerId === player.id) {
+            if (ps.houses === 5) totalFee += card.hotel;
+            else totalFee += (ps.houses || 0) * card.house;
+          }
+        });
+        if (totalFee > 0) chargePlayer(player, totalFee, null, 'Property repairs');
+        gameState.turnPhase = rolledDoubles ? 'roll' : 'end';
+        await saveGameState(gameState);
+      } else if (card.action === 'move') {
+        const steps = (card.target - player.position + 40) % 40;
+        await movePlayerSteps(player, steps === 0 ? 40 : steps, rolledDoubles);
+      }
+    }
+
+    function chargePlayer(player, amount, recipient, reason) {
+      player.cash -= amount;
+      if (recipient) {
+        recipient.cash += amount;
+        gameState.logs.push(`💸 ${player.name} paid $${amount} to ${recipient.name} for ${reason}.`);
+      } else {
+        if (gameState.settings.vacationCash) {
+          gameState.vacationPool = (gameState.vacationPool || 0) + amount;
+        }
+        gameState.logs.push(`💸 ${player.name} paid $${amount} (${reason}).`);
+      }
+
+      // Auto-liquidate if negative cash
+      if (player.cash < 0) {
+        liquidateAssetsIfNeeded(player);
+      }
+    }
+
+    function liquidateAssetsIfNeeded(player) {
+      // Sell houses first
+      for (const [sid, ps] of Object.entries(gameState.properties)) {
+        if (player.cash >= 0) break;
+        if (ps.ownerId === player.id && (ps.houses || 0) > 0) {
+          const space = BOARD_SPACES[sid];
+          while (ps.houses > 0 && player.cash < 0) {
+            ps.houses -= 1;
+            player.cash += Math.floor(space.houseCost / 2);
+          }
+        }
+      }
+      // Mortgage properties if allowed
+      if (gameState.settings.allowMortgage) {
+        for (const [sid, ps] of Object.entries(gameState.properties)) {
+          if (player.cash >= 0) break;
+          if (ps.ownerId === player.id && !ps.mortgaged) {
+            const space = BOARD_SPACES[sid];
+            ps.mortgaged = true;
+            player.cash += Math.floor(space.price / 2);
+          }
+        }
+      }
+      // Bankruptcy check
+      if (player.cash < 0) {
+        player.bankrupt = true;
+        player.cash = 0;
+        for (const [sid, ps] of Object.entries(gameState.properties)) {
+          if (ps.ownerId === player.id) {
+            delete gameState.properties[sid];
+          }
+        }
+        gameState.logs.push(`💀 ${player.name} went BANKRUPT!`);
+      }
+    }
+
+    // --- BUYING & AUCTIONING ---
+    window.buyCurrentProperty = async () => {
+      if (!gameState || gameState.turnPhase !== 'action') return;
+      const player = gameState.players[gameState.currentTurnIndex];
+      if (player.id !== currentUser.uid && !player.isBot) return;
+
+      const space = BOARD_SPACES[player.position];
+      if (gameState.properties[space.id] || player.cash < space.price) return;
+
+      player.cash -= space.price;
+      gameState.properties[space.id] = { ownerId: player.id, houses: 0, mortgaged: false };
+      gameState.logs.push(`🏢 ${player.name} bought ${space.name} for $${space.price}!`);
+
+      const rolledDoubles = gameState.dice[0] === gameState.dice[1] && gameState.doublesCount > 0;
+      gameState.turnPhase = rolledDoubles ? 'roll' : 'end';
+      await saveGameState(gameState);
+    };
+
+    window.startPropertyAuction = async (spaceId) => {
+      if (!gameState || !gameState.settings.allowAuction) return;
+      await startAuctionInternal(spaceId);
+    };
+
+    async function startAuctionInternal(spaceId) {
+      const space = BOARD_SPACES[spaceId];
+      gameState.turnPhase = 'auction';
+      gameState.auction = {
+        spaceId,
+        highestBid: 10,
+        highestBidderId: null,
+        endsAt: Date.now() + 8000,
+        bidCount: 0
+      };
+      gameState.logs.push(`🔨 Open Auction started for ${space.name} (Starting bid: $10)! Anyone can bid anytime!`);
+      await saveGameState(gameState);
+    }
+
+    function renderAuctionModalIfOpen(state) {
+      const modal = document.getElementById('auction-modal');
+      if (state.turnPhase !== 'auction' || !state.auction) {
+        modal.classList.add('hidden');
+        if (auctionTickTimer) {
+          clearInterval(auctionTickTimer);
+          auctionTickTimer = null;
+        }
+        return;
+      }
+
+      modal.classList.remove('hidden');
+      const auc = state.auction;
+      const space = BOARD_SPACES[auc.spaceId];
+      const highestBidder = state.players.find(p => p.id === auc.highestBidderId);
+      const me = state.players.find(p => p.id === currentUser.uid);
+      const canBid = me && !me.bankrupt;
+      const nextMinBid = auc.highestBidderId ? auc.highestBid + 10 : 10;
+      const secondsLeft = Math.max(0, Math.ceil((auc.endsAt - Date.now()) / 1000));
+
+      document.getElementById('auction-modal-content').innerHTML = `
+        <div class="bg-[#0d111c] border border-slate-800 rounded-2xl p-4 mb-4">
+          <div class="flex items-center justify-between mb-1">
+            <div class="flex items-center gap-2">
+              ${space.country ? getFlagImg(space.country) : ''}
+              <h4 class="text-lg font-black text-white">${space.name}</h4>
+            </div>
+            <span id="auction-countdown-badge" class="px-2.5 py-1 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 font-mono font-extrabold text-xs">
+              ${secondsLeft}s left
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">List Price: $${space.price} • Free-for-all bidding (no turns!)</p>
+          <div class="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between">
+            <div>
+              <div class="text-[11px] text-slate-400">Current Highest Bid</div>
+              <div class="text-xl font-black text-emerald-400">$${auc.highestBid}</div>
+            </div>
+            <div class="text-right">
+              <div class="text-[11px] text-slate-400">Highest Bidder</div>
+              <div class="text-xs font-extrabold text-white">${highestBidder ? highestBidder.name : 'No bids yet'}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="text-xs font-bold text-center text-amber-300 mb-3">
+          ${auc.highestBidderId === currentUser.uid
+            ? 'You hold the highest bid! Waiting for timer or rival bids...'
+            : 'Anyone can bid anytime before the timer hits 0s!'}
+        </div>
+
+        ${canBid ? `
+          <div class="space-y-2">
+            <div class="flex items-center gap-2">
+              ${me.cash >= nextMinBid ? `
+                <button onclick="window.placeAuctionBid(${nextMinBid})" class="flex-1 py-2.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition">
+                  +$10 ($${nextMinBid})
+                </button>
+              ` : ''}
+              ${me.cash >= nextMinBid + 40 ? `
+                <button onclick="window.placeAuctionBid(${nextMinBid + 40})" class="flex-1 py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition">
+                  +$50 ($${nextMinBid + 40})
+                </button>
+              ` : ''}
+              ${me.cash >= nextMinBid + 90 ? `
+                <button onclick="window.placeAuctionBid(${nextMinBid + 90})" class="flex-1 py-2.5 px-3 rounded-xl bg-violet-500 hover:bg-violet-400 text-white font-black text-xs transition">
+                  +$100 ($${nextMinBid + 90})
+                </button>
+              ` : ''}
+            </div>
+            <div class="flex items-center gap-2">
+              <input id="custom-auction-bid-input" type="number" min="${nextMinBid}" max="${me.cash}" placeholder="Custom bid ($${nextMinBid}+)"
+                class="flex-1 bg-[#0d111c] border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-emerald-500" />
+              <button onclick="window.placeCustomAuctionBid()" class="py-2 px-4 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs transition">
+                Bid
+              </button>
+            </div>
+          </div>
+        ` : ''}
+      `;
+
+      if (!auctionTickTimer) {
+        auctionTickTimer = setInterval(async () => {
+          if (!gameState || gameState.turnPhase !== 'auction' || !gameState.auction) {
+            clearInterval(auctionTickTimer);
+            auctionTickTimer = null;
+            return;
+          }
+          const rem = Math.max(0, Math.ceil((gameState.auction.endsAt - Date.now()) / 1000));
+          const badge = document.getElementById('auction-countdown-badge');
+          if (badge) badge.textContent = `${rem}s left`;
+
+          if (Date.now() >= gameState.auction.endsAt && gameState.hostId === currentUser.uid) {
+            clearInterval(auctionTickTimer);
+            auctionTickTimer = null;
+            await finalizeOpenAuction();
+          }
+        }, 250);
+      }
+    }
+
+    window.placeCustomAuctionBid = async () => {
+      const input = document.getElementById('custom-auction-bid-input');
+      if (!input) return;
+      const val = parseInt(input.value, 10);
+      if (!isNaN(val)) {
+        await window.placeAuctionBid(val);
+      }
+    };
+
+    window.placeAuctionBid = async (amount, bidderOverrideId = null) => {
+      if (!gameState || gameState.turnPhase !== 'auction' || !gameState.auction) return;
+      const auc = gameState.auction;
+      const bidderId = bidderOverrideId || currentUser.uid;
+      const bidder = gameState.players.find(p => p.id === bidderId);
+      const minRequired = auc.highestBidderId ? auc.highestBid + 10 : 10;
+
+      if (!bidder || bidder.bankrupt || bidder.cash < amount || amount < minRequired) {
+        if (!bidderOverrideId) showToast(`Bid must be at least $${minRequired} within your cash!`, 'error');
+        return;
+      }
+
+      auc.highestBid = amount;
+      auc.highestBidderId = bidder.id;
+      auc.bidCount = (auc.bidCount || 0) + 1;
+      auc.endsAt = Date.now() + 6000; // Reset countdown to 6s on every new bid
+      gameState.logs.push(`🔨 ${bidder.name} bid $${amount}!`);
+      await saveGameState(gameState);
+    };
+
+    async function finalizeOpenAuction() {
+      if (!gameState || gameState.turnPhase !== 'auction' || !gameState.auction) return;
+      const auc = gameState.auction;
+      const space = BOARD_SPACES[auc.spaceId];
+
+      if (auc.highestBidderId) {
+        const winner = gameState.players.find(p => p.id === auc.highestBidderId);
+        if (winner && winner.cash >= auc.highestBid) {
+          winner.cash -= auc.highestBid;
+          gameState.properties[space.id] = { ownerId: winner.id, houses: 0, mortgaged: false };
+          gameState.logs.push(`🏆 ${winner.name} won ${space.name} at auction for $${auc.highestBid}!`);
+        }
+      } else {
+        gameState.logs.push(`No one bid on ${space.name}. It remains unowned.`);
+      }
+
+      gameState.auction = null;
+      const rolledDoubles = gameState.dice[0] === gameState.dice[1] && gameState.doublesCount > 0;
+      gameState.turnPhase = rolledDoubles ? 'roll' : 'end';
+      await saveGameState(gameState);
+    }
+
+    // --- END TURN & ROTATION ---
+    window.endPlayerTurn = async () => {
+      if (!gameState) return;
+      const currentPlayer = gameState.players[gameState.currentTurnIndex];
+      if (currentPlayer.id !== currentUser.uid && !currentPlayer.isBot) return;
+
+      gameState.doublesCount = 0;
+      let nextIdx = gameState.currentTurnIndex;
+      let safety = 0;
+
+      do {
+        nextIdx = (nextIdx + 1) % gameState.players.length;
+        safety++;
+        const candidate = gameState.players[nextIdx];
+        if (!candidate.bankrupt && candidate.skipTurn) {
+          candidate.skipTurn = false;
+          gameState.logs.push(`🏖️ ${candidate.name} skipped their turn while on Vacation.`);
+          continue;
+        }
+        if (!candidate.bankrupt) break;
+      } while (safety < 12);
+
+      gameState.currentTurnIndex = nextIdx;
+      gameState.turnPhase = 'roll';
+      await saveGameState(gameState);
+    };
+
+    // --- PROPERTY DETAILS, BUILDING HOUSES/HOTELS & MORTGAGING ---
+    window.openPropertyModal = (spaceId) => {
+      if (!gameState) return;
+      const space = BOARD_SPACES[spaceId];
+      if (!['property', 'airport', 'utility'].includes(space.type)) return;
+
+      const propState = gameState.properties[spaceId];
+      const owner = propState ? gameState.players.find(p => p.id === propState.ownerId) : null;
+      const isMine = owner && owner.id === currentUser.uid;
+      const me = gameState.players.find(p => p.id === currentUser.uid);
+
+      let rentTableHtml = '';
+      if (space.type === 'property') {
+        const labels = ['Base Rent (Country Monopoly: 2x)', '1 House', '2 Houses', '3 Houses', '4 Houses', '1 Hotel (5 Houses)'];
+        rentTableHtml = `
+          <div class="space-y-1.5 my-4 text-xs">
+            ${space.rent.map((r, idx) => `
+              <div class="flex justify-between px-3 py-1.5 rounded-lg ${(propState?.houses || 0) === idx ? 'bg-violet-600/25 border border-violet-500/40 text-white font-bold' : 'bg-[#0d111c] text-slate-300'}">
+                <span>${labels[idx]}</span>
+                <span class="font-extrabold text-emerald-400">$${r}</span>
+              </div>
+            `).join('')}
+          </div>
+          <div class="text-xs text-slate-400 flex justify-between px-1 mb-4">
+            <span>House / Hotel Upgrade Cost:</span>
+            <span class="font-bold text-white">$${space.houseCost} each</span>
+          </div>
+        `;
+      } else if (space.type === 'airport') {
+        rentTableHtml = `
+          <div class="space-y-1.5 my-4 text-xs">
+            ${[1, 2, 3, 4].map(cnt => `
+              <div class="flex justify-between px-3 py-1.5 rounded-lg bg-[#0d111c] text-slate-300">
+                <span>${cnt} Airport${cnt > 1 ? 's' : ''} Owned</span>
+                <span class="font-extrabold text-sky-400">$${space.rent[cnt - 1]}</span>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      } else {
+        rentTableHtml = `
+          <div class="my-4 p-3 rounded-xl bg-[#0d111c] text-xs text-slate-300 space-y-1">
+            <div>1 Utility Owned: <span class="font-bold text-amber-400">4x Dice Roll</span></div>
+            <div>2 Utilities Owned: <span class="font-bold text-amber-400">10x Dice Roll</span></div>
+          </div>
+        `;
+      }
+
+      let ownerActionsHtml = '';
+      if (isMine && me && !me.bankrupt) {
+        const houses = propState.houses || 0;
+        const monopoly = space.type === 'property' && hasCountryMonopoly(gameState, currentUser.uid, space.country);
+        const canBuild = monopoly && !propState.mortgaged && houses < 5 && me.cash >= space.houseCost;
+        const canDemolish = space.type === 'property' && houses > 0;
+        const canMortgage = gameState.settings.allowMortgage && !propState.mortgaged && houses === 0;
+        const unmortgageCost = Math.ceil(space.price * 0.55);
+        const canUnmortgage = propState.mortgaged && me.cash >= unmortgageCost;
+
+        ownerActionsHtml = `
+          <div class="pt-3 border-t border-slate-800 flex flex-wrap gap-2">
+            ${canBuild ? `
+              <button onclick="window.buildHouseOnProp(${space.id})" class="flex-1 py-2.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs">
+                ${houses === 4 ? 'Upgrade to Hotel' : 'Build House'} (-$${space.houseCost})
+              </button>
+            ` : ''}
+            ${canDemolish ? `
+              <button onclick="window.sellHouseOnProp(${space.id})" class="flex-1 py-2.5 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-bold text-xs">
+                Demolish (+$${Math.floor(space.houseCost / 2)})
+              </button>
+            ` : ''}
+            ${canMortgage ? `
+              <button onclick="window.toggleMortgageProp(${space.id})" class="flex-1 py-2.5 px-3 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 font-bold text-xs">
+                Mortgage (+$${Math.floor(space.price / 2)})
+              </button>
+            ` : ''}
+            ${canUnmortgage ? `
+              <button onclick="window.toggleMortgageProp(${space.id})" class="flex-1 py-2.5 px-3 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs">
+                Unmortgage (-$${unmortgageCost})
+              </button>
+            ` : ''}
+          </div>
+        `;
+      }
+
+      document.getElementById('property-modal-content').innerHTML = `
+        <div class="flex items-center gap-3 mb-2">
+          ${space.country ? getFlagImg(space.country) : ''}
+          <div>
+            <h3 class="text-xl font-black text-white">${space.name}</h3>
+            <p class="text-xs text-slate-400">${space.country ? COUNTRIES[space.country].name : 'Global Infrastructure'} • Price: $${space.price}</p>
+          </div>
+        </div>
+        <div class="text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 inline-block">
+          Owner: <span style="color:${owner?.color || '#94a3b8'}">${owner ? owner.name : 'Unowned'}</span>
+        </div>
+        ${rentTableHtml}
+        ${ownerActionsHtml}
+      `;
+
+      document.getElementById('property-modal').classList.remove('hidden');
+    };
+
+    window.closePropertyModal = () => {
+      document.getElementById('property-modal').classList.add('hidden');
+    };
+
+    window.buildHouseOnProp = async (spaceId) => {
+      const space = BOARD_SPACES[spaceId];
+      const ps = gameState.properties[spaceId];
+      const me = gameState.players.find(p => p.id === currentUser.uid);
+      if (!ps || ps.ownerId !== currentUser.uid || ps.mortgaged || ps.houses >= 5 || me.cash < space.houseCost) return;
+      if (!hasCountryMonopoly(gameState, currentUser.uid, space.country)) return;
+
+      me.cash -= space.houseCost;
+      ps.houses = (ps.houses || 0) + 1;
+      const label = ps.houses === 5 ? 'a Hotel' : `House #${ps.houses}`;
+      gameState.logs.push(`🏗️ ${me.name} built ${label} in ${space.name}!`);
+      await saveGameState(gameState);
+      window.openPropertyModal(spaceId);
+    };
+
+    window.sellHouseOnProp = async (spaceId) => {
+      const space = BOARD_SPACES[spaceId];
+      const ps = gameState.properties[spaceId];
+      const me = gameState.players.find(p => p.id === currentUser.uid);
+      if (!ps || ps.ownerId !== currentUser.uid || (ps.houses || 0) <= 0) return;
+
+      ps.houses -= 1;
+      me.cash += Math.floor(space.houseCost / 2);
+      gameState.logs.push(`🏚️ ${me.name} demolished a building in ${space.name}.`);
+      await saveGameState(gameState);
+      window.openPropertyModal(spaceId);
+    };
+
+    window.toggleMortgageProp = async (spaceId) => {
+      if (!gameState.settings.allowMortgage) return;
+      const space = BOARD_SPACES[spaceId];
+      const ps = gameState.properties[spaceId];
+      const me = gameState.players.find(p => p.id === currentUser.uid);
+      if (!ps || ps.ownerId !== currentUser.uid || (ps.houses || 0) > 0) return;
+
+      if (!ps.mortgaged) {
+        ps.mortgaged = true;
+        me.cash += Math.floor(space.price / 2);
+        gameState.logs.push(`🏦 ${me.name} mortgaged ${space.name} for $${Math.floor(space.price / 2)}.`);
+      } else {
+        const cost = Math.ceil(space.price * 0.55);
+        if (me.cash < cost) return showToast('Not enough cash to unmortgage!', 'error');
+        ps.mortgaged = false;
+        me.cash -= cost;
+        gameState.logs.push(`🏦 ${me.name} unmortgaged ${space.name} for $${cost}.`);
+      }
+      await saveGameState(gameState);
+      window.openPropertyModal(spaceId);
+    };
+
+    // --- PLAYER-TO-PLAYER TRADING ---
+    window.openTradeModal = () => {
+      if (!gameState) return;
+      const partners = gameState.players.filter(p => p.id !== currentUser.uid && !p.bankrupt);
+      if (partners.length === 0) return showToast('No active players to trade with.', 'warn');
+
+      const select = document.getElementById('trade-partner-select');
+      select.innerHTML = partners.map(p => `<option value="${p.id}">${p.name} ($${p.cash})</option>`).join('');
+
+      const myProps = BOARD_SPACES.filter(s => gameState.properties[s.id]?.ownerId === currentUser.uid && (gameState.properties[s.id]?.houses || 0) === 0);
+      document.getElementById('trade-my-props').innerHTML = myProps.length
+        ? myProps.map(s => `
+            <label class="flex items-center gap-2 text-xs text-slate-200 cursor-pointer">
+              <input type="checkbox" class="trade-offer-prop accent-emerald-500" value="${s.id}" />
+              <span>${s.name} ($${s.price})</span>
+            </label>
+          `).join('')
+        : '<div class="text-[11px] text-slate-500">No unbuilt properties</div>';
+
+      window.renderTradePartnerProps();
+      document.getElementById('trade-modal').classList.remove('hidden');
+    };
+
+    window.renderTradePartnerProps = () => {
+      const partnerId = document.getElementById('trade-partner-select').value;
+      const partnerProps = BOARD_SPACES.filter(s => gameState.properties[s.id]?.ownerId === partnerId && (gameState.properties[s.id]?.houses || 0) === 0);
+      document.getElementById('trade-partner-props').innerHTML = partnerProps.length
+        ? partnerProps.map(s => `
+            <label class="flex items-center gap-2 text-xs text-slate-200 cursor-pointer">
+              <input type="checkbox" class="trade-request-prop accent-violet-500" value="${s.id}" />
+              <span>${s.name} ($${s.price})</span>
+            </label>
+          `).join('')
+        : '<div class="text-[11px] text-slate-500">No unbuilt properties</div>';
+    };
+
+    window.closeTradeModal = () => {
+      document.getElementById('trade-modal').classList.add('hidden');
+    };
+
+    window.submitTradeOffer = async () => {
+      const toId = document.getElementById('trade-partner-select').value;
+      const offerCash = Math.max(0, parseInt(document.getElementById('trade-offer-cash').value) || 0);
+      const requestCash = Math.max(0, parseInt(document.getElementById('trade-request-cash').value) || 0);
+      const offerProps = Array.from(document.querySelectorAll('.trade-offer-prop:checked')).map(el => parseInt(el.value));
+      const requestProps = Array.from(document.querySelectorAll('.trade-request-prop:checked')).map(el => parseInt(el.value));
+
+      const me = gameState.players.find(p => p.id === currentUser.uid);
+      const partner = gameState.players.find(p => p.id === toId);
+      if (!me || !partner || me.cash < offerCash || partner.cash < requestCash) {
+        return showToast('Invalid cash amount in trade offer.', 'error');
+      }
+
+      window.closeTradeModal();
+
+      // Instant AI Bot Evaluation
+      if (partner.isBot) {
+        const offerVal = offerCash + offerProps.reduce((sum, id) => sum + BOARD_SPACES[id].price, 0);
+        const reqVal = requestCash + requestProps.reduce((sum, id) => sum + BOARD_SPACES[id].price, 0);
+        if (offerVal >= reqVal * 0.95) {
+          executeTradeTransfer(me, partner, offerCash, requestCash, offerProps, requestProps);
+          gameState.logs.push(`🤝 ${partner.name} accepted ${me.name}'s trade offer!`);
+        } else {
+          gameState.logs.push(`❌ ${partner.name} declined ${me.name}'s trade offer.`);
+        }
+        await saveGameState(gameState);
+        return;
+      }
+
+      gameState.tradeOffer = { fromId: me.id, toId: partner.id, offerCash, requestCash, offerProps, requestProps };
+      gameState.logs.push(`📨 ${me.name} sent a trade offer to ${partner.name}.`);
+      await saveGameState(gameState);
+    };
+
+    function renderIncomingTradeIfOpen(state) {
+      const modal = document.getElementById('incoming-trade-modal');
+      if (!state.tradeOffer || state.tradeOffer.toId !== currentUser.uid) {
+        modal.classList.add('hidden');
+        return;
+      }
+
+      const offer = state.tradeOffer;
+      const sender = state.players.find(p => p.id === offer.fromId);
+      const offeredNames = offer.offerProps.map(id => BOARD_SPACES[id].name).join(', ') || 'None';
+      const requestedNames = offer.requestProps.map(id => BOARD_SPACES[id].name).join(', ') || 'None';
+
+      document.getElementById('incoming-trade-content').innerHTML = `
+        <p class="text-xs text-slate-300 mb-3"><span class="font-bold text-white">${sender?.name}</span> proposes a trade:</p>
+        <div class="bg-[#0d111c] border border-slate-800 rounded-xl p-3 space-y-2 text-xs">
+          <div><span class="text-emerald-400 font-bold">You Receive:</span> $${offer.offerCash} &amp; [${offeredNames}]</div>
+          <div><span class="text-rose-400 font-bold">You Give:</span> $${offer.requestCash} &amp; [${requestedNames}]</div>
+        </div>
+      `;
+      modal.classList.remove('hidden');
+    }
+
+    window.respondToTrade = async (accepted) => {
+      if (!gameState || !gameState.tradeOffer) return;
+      const offer = gameState.tradeOffer;
+      const sender = gameState.players.find(p => p.id === offer.fromId);
+      const receiver = gameState.players.find(p => p.id === offer.toId);
+
+      if (accepted && sender && receiver) {
+        executeTradeTransfer(sender, receiver, offer.offerCash, offer.requestCash, offer.offerProps, offer.requestProps);
+        gameState.logs.push(`🤝 ${receiver.name} accepted ${sender.name}'s trade!`);
+      } else {
+        gameState.logs.push(`❌ ${receiver?.name || 'Player'} declined the trade offer.`);
+      }
+
+      gameState.tradeOffer = null;
+      await saveGameState(gameState);
+    };
+
+    function executeTradeTransfer(p1, p2, p1Cash, p2Cash, p1Props, p2Props) {
+      p1.cash = p1.cash - p1Cash + p2Cash;
+      p2.cash = p2.cash - p2Cash + p1Cash;
+      p1Props.forEach(id => { if (gameState.properties[id]) gameState.properties[id].ownerId = p2.id; });
+      p2Props.forEach(id => { if (gameState.properties[id]) gameState.properties[id].ownerId = p1.id; });
+    }
+
+    // --- AI BOT AUTOMATION (HOST DRIVEN) ---
+    function scheduleBotIfNeeded(state) {
+      if (botTimer) clearTimeout(botTimer);
+      if (state.status !== 'playing' || state.hostId !== currentUser.uid) return;
+
+      const alive = state.players.filter(p => !p.bankrupt);
+      if (alive.length <= 1) return;
+
+      // Free-for-all Auction Bot Bidding
+      if (state.turnPhase === 'auction' && state.auction) {
+        const auc = state.auction;
+        const space = BOARD_SPACES[auc.spaceId];
+        const nextBid = auc.highestBidderId ? auc.highestBid + 10 : 10;
+        const interestedBots = alive.filter(p =>
+          p.isBot &&
+          p.id !== auc.highestBidderId &&
+          p.cash >= nextBid &&
+          nextBid <= space.price * 0.9
+        );
+
+        if (interestedBots.length > 0) {
+          const randomBot = interestedBots[Math.floor(Math.random() * interestedBots.length)];
+          botTimer = setTimeout(async () => {
+            if (!gameState || gameState.turnPhase !== 'auction' || !gameState.auction) return;
+            const latestMin = gameState.auction.highestBidderId ? gameState.auction.highestBid + 10 : 10;
+            if (randomBot.cash >= latestMin && latestMin <= space.price * 0.9 && gameState.auction.highestBidderId !== randomBot.id) {
+              await window.placeAuctionBid(latestMin, randomBot.id);
+            }
+          }, 900 + Math.random() * 900);
+        }
+        return;
+      }
+
+      const activePlayer = state.players[state.currentTurnIndex];
+      if (!activePlayer || !activePlayer.isBot) return;
+
+      botTimer = setTimeout(async () => {
+        if (state.turnPhase === 'roll') {
+          if (activePlayer.inJail && activePlayer.cash >= 150) {
+            activePlayer.cash -= 50;
+            activePlayer.inJail = false;
+            activePlayer.jailTurns = 0;
+            gameState.logs.push(`${activePlayer.name} paid $50 bail.`);
+          }
+          await window.rollDiceTurn();
+        } else if (state.turnPhase === 'action') {
+          const space = BOARD_SPACES[activePlayer.position];
+          if (activePlayer.cash >= space.price + 100) {
+            await window.buyCurrentProperty();
+          } else if (gameState.settings.allowAuction) {
+            await window.startPropertyAuction(space.id);
+          } else {
+            await window.endPlayerTurn();
+          }
+        } else if (state.turnPhase === 'end') {
+          // Bot builds houses if it has a Country Monopoly
+          for (const s of BOARD_SPACES) {
+            if (s.type === 'property' && gameState.properties[s.id]?.ownerId === activePlayer.id) {
+              const ps = gameState.properties[s.id];
+              if (hasCountryMonopoly(gameState, activePlayer.id, s.country) && !ps.mortgaged && (ps.houses || 0) < 5 && activePlayer.cash >= s.houseCost + 200) {
+                activePlayer.cash -= s.houseCost;
+                ps.houses = (ps.houses || 0) + 1;
+                gameState.logs.push(`🏗️ ${activePlayer.name} upgraded ${s.name}!`);
+                break;
+              }
+            }
+          }
+          await window.endPlayerTurn();
+        }
+      }, 900);
+    }
+
+    // Boot
+    window.addEventListener('DOMContentLoaded', async () => {
+      initLobbyPickers();
+      await initFirebase();
+
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const invitedCode = (params.get('room') || params.get('invite') || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (invitedCode) {
+          document.getElementById('join-code-input').value = invitedCode;
+          document.getElementById('invite-banner-code').textContent = invitedCode;
+          document.getElementById('invite-banner').classList.remove('hidden');
+          document.getElementById('invite-banner').classList.add('flex');
+          await window.joinRoom(invitedCode);
+        }
+      } catch (e) {
+        console.warn('Invite parameter handling failed:', e);
+      }
+    });
+  </script>
+</body>
+</html>
