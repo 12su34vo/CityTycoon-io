@@ -283,7 +283,7 @@
   <!-- LOBBY SCREEN -->
   <main id="lobby-screen" class="flex-1 flex items-center justify-center p-4 sm:p-8">
     <div class="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-6">
-      
+
       <!-- Left: Create or Join -->
       <div class="lg:col-span-5 bg-[#131826] border border-slate-800 rounded-3xl p-6 sm:p-7 shadow-2xl flex flex-col justify-between">
         <div>
@@ -453,7 +453,7 @@
 
   <!-- ACTIVE GAME SCREEN -->
   <main id="game-screen" class="hidden flex-1 w-full max-w-[1780px] mx-auto p-2 sm:p-5 pb-20 xl:pb-5 grid grid-cols-1 xl:grid-cols-12 gap-3 sm:gap-5 items-start">
-    
+
     <!-- Left Column: Players & Trade / Chat -->
     <aside class="xl:col-span-3 space-y-3 sm:space-y-4 order-2 xl:order-1">
       <!-- Players Standings -->
@@ -582,8 +582,8 @@
 
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-    import { getAuth, signInAnonymously, signInWithCustomToken } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-    import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+    import { getAuth, signInAnonymously, signInWithCustomToken, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+    import { getFirestore, doc, getDoc, setDoc, onSnapshot, writeBatch, runTransaction, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
     const COUNTRIES = {
       BR: { name: 'Brazil', code: 'br' },
@@ -775,30 +775,49 @@
       el.innerHTML = html;
     }
 
+    const firebaseConfig = {
+      apiKey: "AIzaSyD2bjaPNZvpEVMb1VwF-zSwNOsn_AgIGso",
+      authDomain: "citytycoon-23724.firebaseapp.com",
+      databaseURL: "https://citytycoon-23724-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "citytycoon-23724",
+      storageBucket: "citytycoon-23724.firebasestorage.app",
+      messagingSenderId: "817517384371",
+      appId: "1:817517384371:web:86ecd594b79e78d6e9d6c6",
+      measurementId: "G-611YVJ05M1"
+    };
+
     let firebaseInitPromise = null;
     function initFirebase() {
       if (firebaseInitPromise) return firebaseInitPromise;
+
       firebaseInitPromise = (async () => {
         try {
-          if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-            const firebaseConfig = JSON.parse(__firebase_config);
-            const app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-              const cred = await signInWithCustomToken(auth, __initial_auth_token);
-              if (cred?.user?.uid) currentUser = cred.user;
-            } else {
-              const cred = await signInAnonymously(auth);
-              if (cred?.user?.uid) currentUser = cred.user;
-            }
-            useCloud = true;
+          const app = initializeApp(firebaseConfig);
+          auth = getAuth(app);
+          db = getFirestore(app);
+
+          await setPersistence(auth, browserLocalPersistence);
+
+          let cred;
+          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            cred = await signInWithCustomToken(auth, __initial_auth_token);
+          } else {
+            cred = await signInAnonymously(auth);
           }
+
+          if (!cred?.user?.uid) {
+            throw new Error('Firebase authentication did not return a player ID.');
+          }
+
+          currentUser = cred.user;
+          useCloud = true;
+          console.log('CityTycoon Firebase connected. Player ID:', currentUser.uid);
         } catch (err) {
-          console.warn('Running in local single-session mode:', err);
+          console.error('Firebase initialisation failed; using local mode:', err);
           useCloud = false;
         }
       })();
+
       return firebaseInitPromise;
     }
 
@@ -852,6 +871,17 @@
     // --- ROOM SYNC HELPERS ---
     function getRoomDocRef(code) {
       return doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code);
+    }
+
+    function getRoomMemberDocRef(code, uid) {
+      return doc(db, 'artifacts', appId, 'public', 'data', 'rooms', code, 'members', uid);
+    }
+
+    async function registerRoomMember(code, uid) {
+      await setDoc(getRoomMemberDocRef(code, uid), {
+        uid: uid,
+        joinedAt: Date.now()
+      });
     }
 
     const LOCAL_ROOMS_KEY = 'wealthup_rooms_v1';
@@ -967,7 +997,36 @@
         chat: []
       };
 
-      await saveGameState(initialState);
+      if (useCloud && db) {
+        try {
+          await runTransaction(db, async (transaction) => {
+            const roomRef = getRoomDocRef(code);
+            const memberRef = getRoomMemberDocRef(code, currentUser.uid);
+            const roomSnap = await transaction.get(roomRef);
+
+            if (roomSnap.exists()) {
+              throw new Error('Room code collision. Please create the room again.');
+            }
+
+            transaction.set(roomRef, initialState);
+            transaction.set(memberRef, {
+              uid: currentUser.uid,
+              joinedAt: Date.now()
+            });
+          });
+
+          gameState = initialState;
+          saveLocalRoom(code, initialState);
+          handleRoomStateUpdate(initialState);
+        } catch (err) {
+          console.error('Room creation failed:', err);
+          currentRoomCode = null;
+          return showToast('Could not create online room. Please try again.', 'error');
+        }
+      } else {
+        await saveGameState(initialState);
+      }
+
       subscribeToRoom(code);
       try {
         const nextUrl = new URL(window.location.href);
@@ -1024,30 +1083,93 @@
       roomData.logs = Array.isArray(roomData.logs) ? roomData.logs : [];
       roomData.chat = Array.isArray(roomData.chat) ? roomData.chat : [];
 
-      if (roomData.status !== 'lobby') return showToast('Game already in progress!', 'error');
-      if (roomData.players.length >= 6) return showToast('Room is full (max 6 players)!', 'error');
+      if (useCloud && db) {
+        try {
+          const joinedState = await runTransaction(db, async (transaction) => {
+            const roomRef = getRoomDocRef(code);
+            const memberRef = getRoomMemberDocRef(code, currentUser.uid);
+            const roomSnap = await transaction.get(roomRef);
 
-      currentRoomCode = code;
-      if (!roomData.players.some(p => p.id === currentUser.uid)) {
-        const usedColors = roomData.players.map(p => p.color);
-        const availColor = TOKEN_COLORS.find(c => !usedColors.includes(c)) || selectedColor;
-        roomData.players.push({
-          id: currentUser.uid,
-          name: nameInput,
-          color: availColor,
-          isBot: false,
-          cash: roomData.settings.startingCash,
-          position: 0,
-          inJail: false,
-          jailTurns: 0,
-          skipTurn: false,
-          bankrupt: false
-        });
-        roomData.logs.push(`${nameInput} joined the room.`);
-        await saveGameState(roomData);
+            if (!roomSnap.exists()) {
+              throw new Error('ROOM_NOT_FOUND');
+            }
+
+            const latestState = roomSnap.data();
+            if (!Array.isArray(latestState.players)) latestState.players = [];
+            if (latestState.status !== 'lobby') throw new Error('GAME_STARTED');
+
+            if (!latestState.players.some(p => p.id === currentUser.uid)) {
+              if (latestState.players.length >= 6) throw new Error('ROOM_FULL');
+
+              const usedColors = latestState.players.map(p => p.color);
+              const availColor = TOKEN_COLORS.find(c => !usedColors.includes(c)) || selectedColor;
+
+              latestState.players.push({
+                id: currentUser.uid,
+                name: nameInput,
+                color: availColor,
+                isBot: false,
+                cash: latestState.settings.startingCash,
+                position: 0,
+                inJail: false,
+                jailTurns: 0,
+                skipTurn: false,
+                bankrupt: false
+              });
+
+              latestState.logs = Array.isArray(latestState.logs) ? latestState.logs : [];
+              latestState.logs.push(`${nameInput} joined the room.`);
+            }
+
+            transaction.set(memberRef, {
+              uid: currentUser.uid,
+              joinedAt: Date.now()
+            });
+            transaction.set(roomRef, latestState);
+
+            return latestState;
+          });
+
+          currentRoomCode = code;
+          gameState = joinedState;
+          saveLocalRoom(code, joinedState);
+          handleRoomStateUpdate(joinedState);
+        } catch (err) {
+          console.error('Room joining failed:', err);
+          if (err.message === 'ROOM_NOT_FOUND') return showToast('Room not found.', 'error');
+          if (err.message === 'GAME_STARTED') return showToast('Game already in progress!', 'error');
+          if (err.message === 'ROOM_FULL') return showToast('Room is full (max 6 players)!', 'error');
+          return showToast('Could not join online room. Please try again.', 'error');
+        }
       } else {
-        handleRoomStateUpdate(roomData);
+        if (roomData.status !== 'lobby') return showToast('Game already in progress!', 'error');
+        if (roomData.players.length >= 6 && !roomData.players.some(p => p.id === currentUser.uid)) {
+          return showToast('Room is full (max 6 players)!', 'error');
+        }
+
+        currentRoomCode = code;
+        if (!roomData.players.some(p => p.id === currentUser.uid)) {
+          const usedColors = roomData.players.map(p => p.color);
+          const availColor = TOKEN_COLORS.find(c => !usedColors.includes(c)) || selectedColor;
+          roomData.players.push({
+            id: currentUser.uid,
+            name: nameInput,
+            color: availColor,
+            isBot: false,
+            cash: roomData.settings.startingCash,
+            position: 0,
+            inJail: false,
+            jailTurns: 0,
+            skipTurn: false,
+            bankrupt: false
+          });
+          roomData.logs.push(`${nameInput} joined the room.`);
+          await saveGameState(roomData);
+        } else {
+          handleRoomStateUpdate(roomData);
+        }
       }
+
       subscribeToRoom(code);
       showToast(`Joined room ${code}!`, 'success');
     };
@@ -1093,8 +1215,44 @@
 
     window.removeLobbyPlayer = async (pid) => {
       if (!gameState || gameState.hostId !== currentUser.uid) return;
-      gameState.players = gameState.players.filter(p => p.id !== pid);
-      await saveGameState(gameState);
+
+      if (useCloud && db && currentRoomCode) {
+        try {
+          const code = currentRoomCode;
+
+          await runTransaction(db, async (transaction) => {
+            const roomRef = getRoomDocRef(code);
+            const memberRef = getRoomMemberDocRef(code, pid);
+            const roomSnap = await transaction.get(roomRef);
+
+            if (!roomSnap.exists()) throw new Error('ROOM_NOT_FOUND');
+
+            const latestState = roomSnap.data();
+
+            if (latestState.hostId !== currentUser.uid) {
+              throw new Error('NOT_HOST');
+            }
+
+            latestState.players = (latestState.players || []).filter(p => p.id !== pid);
+
+            transaction.set(roomRef, latestState);
+            transaction.delete(memberRef);
+          });
+
+          const updatedRoom = await getDoc(getRoomDocRef(code));
+          if (updatedRoom.exists()) {
+            gameState = updatedRoom.data();
+            saveLocalRoom(code, gameState);
+            handleRoomStateUpdate(gameState);
+          }
+        } catch (err) {
+          console.error('Player removal failed:', err);
+          showToast('Could not remove player. Please try again.', 'error');
+        }
+      } else {
+        gameState.players = gameState.players.filter(p => p.id !== pid);
+        await saveGameState(gameState);
+      }
     };
 
     window.updateRoomSettings = async () => {

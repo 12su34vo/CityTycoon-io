@@ -1,0 +1,99 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function roomPath(appId, roomCode) {
+      return /databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(roomCode);
+    }
+
+    function memberPath(appId, roomCode, uid) {
+      return /databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(roomCode)/members/$(uid);
+    }
+
+    function isMember(appId, roomCode) {
+      return signedIn()
+        && exists(memberPath(appId, roomCode, request.auth.uid));
+    }
+
+    function lastPlayerIsCurrentUser(roomData) {
+      return roomData.players.size() > 0
+        && roomData.players[roomData.players.size() - 1].id == request.auth.uid;
+    }
+
+    match /artifacts/{appId}/public/data/rooms/{roomCode} {
+
+      allow create: if signedIn()
+        && appId == 'citytycoon-global-v1'
+        && request.resource.data.hostId == request.auth.uid
+        && request.resource.data.status == 'lobby'
+        && request.resource.data.players.size() == 1
+        && lastPlayerIsCurrentUser(request.resource.data)
+        && existsAfter(memberPath(appId, roomCode, request.auth.uid))
+        && getAfter(memberPath(appId, roomCode, request.auth.uid)).data.uid == request.auth.uid;
+
+      allow get: if signedIn()
+        && appId == 'citytycoon-global-v1'
+        && (
+          !exists(roomPath(appId, roomCode))
+          || resource.data.status == 'lobby'
+          || isMember(appId, roomCode)
+        );
+
+      allow list: if false;
+
+      allow update: if signedIn()
+        && appId == 'citytycoon-global-v1'
+        && request.resource.data.players.size() <= 6
+        && (
+          isMember(appId, roomCode)
+          || (
+            resource.data.status == 'lobby'
+            && request.resource.data.status == 'lobby'
+            && !isMember(appId, roomCode)
+            && existsAfter(memberPath(appId, roomCode, request.auth.uid))
+            && lastPlayerIsCurrentUser(request.resource.data)
+            && request.resource.data.players.size() == resource.data.players.size() + 1
+            && request.resource.data.players.hasAll(resource.data.players)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['players', 'logs'])
+          )
+        );
+
+      allow delete: if signedIn()
+        && appId == 'citytycoon-global-v1'
+        && resource.data.hostId == request.auth.uid;
+
+      match /members/{uid} {
+
+        allow get, list: if signedIn()
+          && appId == 'citytycoon-global-v1'
+          && (
+            uid == request.auth.uid
+            || isMember(appId, roomCode)
+          );
+
+        allow create: if signedIn()
+          && appId == 'citytycoon-global-v1'
+          && uid == request.auth.uid
+          && request.resource.data.uid == request.auth.uid
+          && existsAfter(roomPath(appId, roomCode))
+          && getAfter(roomPath(appId, roomCode)).data.status == 'lobby'
+          && lastPlayerIsCurrentUser(getAfter(roomPath(appId, roomCode)).data);
+
+        allow update: if signedIn()
+          && appId == 'citytycoon-global-v1'
+          && uid == request.auth.uid
+          && request.resource.data.uid == request.auth.uid
+          && isMember(appId, roomCode);
+
+        allow delete: if signedIn()
+          && appId == 'citytycoon-global-v1'
+          && get(roomPath(appId, roomCode)).data.hostId == request.auth.uid;
+      }
+    }
+  }
+}
